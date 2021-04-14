@@ -24,7 +24,7 @@ import org.flowable.common.engine.impl.interceptor.CommandExecutor;
 import org.flowable.common.engine.impl.query.AbstractQuery;
 import org.flowable.job.api.Job;
 import org.flowable.job.api.JobQuery;
-import org.flowable.job.service.impl.util.CommandContextUtil;
+import org.flowable.job.service.JobServiceConfiguration;
 
 /**
  * @author Joram Barrez
@@ -34,6 +34,9 @@ import org.flowable.job.service.impl.util.CommandContextUtil;
 public class JobQueryImpl extends AbstractQuery<JobQuery, Job> implements JobQuery, Serializable {
 
     private static final long serialVersionUID = 1L;
+
+    protected JobServiceConfiguration jobServiceConfiguration;
+
     protected String id;
     protected String processInstanceId;
     protected String executionId;
@@ -47,6 +50,7 @@ public class JobQueryImpl extends AbstractQuery<JobQuery, Job> implements JobQue
     protected String subScopeId;
     protected String scopeType;
     protected String scopeDefinitionId;
+    protected String correlationId;
     protected boolean onlyTimers;
     protected boolean onlyMessages;
     protected Date duedateHigherThan;
@@ -58,7 +62,8 @@ public class JobQueryImpl extends AbstractQuery<JobQuery, Job> implements JobQue
     protected String tenantId;
     protected String tenantIdLike;
     protected boolean withoutTenantId;
-    
+    protected boolean withoutScopeType;
+
     protected String lockOwner;
     protected boolean onlyLocked;
     protected boolean onlyUnlocked;
@@ -66,12 +71,14 @@ public class JobQueryImpl extends AbstractQuery<JobQuery, Job> implements JobQue
     public JobQueryImpl() {
     }
 
-    public JobQueryImpl(CommandContext commandContext) {
+    public JobQueryImpl(CommandContext commandContext, JobServiceConfiguration jobServiceConfiguration) {
         super(commandContext);
+        this.jobServiceConfiguration = jobServiceConfiguration;
     }
 
-    public JobQueryImpl(CommandExecutor commandExecutor) {
+    public JobQueryImpl(CommandExecutor commandExecutor, JobServiceConfiguration jobServiceConfiguration) {
         super(commandExecutor);
+        this.jobServiceConfiguration = jobServiceConfiguration;
     }
 
     @Override
@@ -100,7 +107,7 @@ public class JobQueryImpl extends AbstractQuery<JobQuery, Job> implements JobQue
         this.processDefinitionId = processDefinitionId;
         return this;
     }
-    
+
     @Override
     public JobQueryImpl category(String category) {
         if (category == null) {
@@ -109,7 +116,7 @@ public class JobQueryImpl extends AbstractQuery<JobQuery, Job> implements JobQue
         this.category = category;
         return this;
     }
-    
+
     @Override
     public JobQueryImpl categoryLike(String categoryLike) {
         if (categoryLike == null) {
@@ -118,7 +125,7 @@ public class JobQueryImpl extends AbstractQuery<JobQuery, Job> implements JobQue
         this.categoryLike = categoryLike;
         return this;
     }
-    
+
     @Override
     public JobQueryImpl elementId(String elementId) {
         if (elementId == null) {
@@ -127,7 +134,7 @@ public class JobQueryImpl extends AbstractQuery<JobQuery, Job> implements JobQue
         this.elementId = elementId;
         return this;
     }
-    
+
     @Override
     public JobQueryImpl elementName(String elementName) {
         if (elementName == null) {
@@ -136,7 +143,7 @@ public class JobQueryImpl extends AbstractQuery<JobQuery, Job> implements JobQue
         this.elementName = elementName;
         return this;
     }
-    
+
     @Override
     public JobQueryImpl scopeId(String scopeId) {
         if (scopeId == null) {
@@ -145,7 +152,7 @@ public class JobQueryImpl extends AbstractQuery<JobQuery, Job> implements JobQue
         this.scopeId = scopeId;
         return this;
     }
-    
+
     @Override
     public JobQueryImpl subScopeId(String subScopeId) {
         if (subScopeId == null) {
@@ -154,7 +161,7 @@ public class JobQueryImpl extends AbstractQuery<JobQuery, Job> implements JobQue
         this.subScopeId = subScopeId;
         return this;
     }
-    
+
     @Override
     public JobQueryImpl scopeType(String scopeType) {
         if (scopeType == null) {
@@ -163,7 +170,7 @@ public class JobQueryImpl extends AbstractQuery<JobQuery, Job> implements JobQue
         this.scopeType = scopeType;
         return this;
     }
-    
+
     @Override
     public JobQueryImpl scopeDefinitionId(String scopeDefinitionId) {
         if (scopeDefinitionId == null) {
@@ -172,7 +179,7 @@ public class JobQueryImpl extends AbstractQuery<JobQuery, Job> implements JobQue
         this.scopeDefinitionId = scopeDefinitionId;
         return this;
     }
-    
+
     @Override
     public JobQueryImpl caseInstanceId(String caseInstanceId) {
         if (caseInstanceId == null) {
@@ -182,7 +189,7 @@ public class JobQueryImpl extends AbstractQuery<JobQuery, Job> implements JobQue
         scopeType(ScopeTypes.CMMN);
         return this;
     }
-    
+
     @Override
     public JobQueryImpl caseDefinitionId(String caseDefinitionId) {
         if (caseDefinitionId == null) {
@@ -192,7 +199,7 @@ public class JobQueryImpl extends AbstractQuery<JobQuery, Job> implements JobQue
         scopeType(ScopeTypes.CMMN);
         return this;
     }
-    
+
     @Override
     public JobQueryImpl planItemInstanceId(String planItemInstanceId) {
         if (planItemInstanceId == null) {
@@ -200,6 +207,15 @@ public class JobQueryImpl extends AbstractQuery<JobQuery, Job> implements JobQue
         }
         subScopeId(planItemInstanceId);
         scopeType(ScopeTypes.CMMN);
+        return this;
+    }
+
+    @Override
+    public JobQueryImpl correlationId(String correlationId) {
+        if (correlationId == null) {
+            throw new FlowableIllegalArgumentException("Provided correlationId is null");
+        }
+        this.correlationId = correlationId;
         return this;
     }
 
@@ -314,11 +330,22 @@ public class JobQueryImpl extends AbstractQuery<JobQuery, Job> implements JobQue
         return this;
     }
 
+    @Override
+    public JobQuery withoutScopeType() {
+        this.withoutScopeType = true;
+        return this;
+    }
+
     // sorting //////////////////////////////////////////
 
     @Override
     public JobQuery orderByJobDuedate() {
         return orderBy(JobQueryProperty.DUEDATE);
+    }
+
+    @Override
+    public JobQuery orderByJobCreateTime() {
+        return orderBy(JobQueryProperty.CREATE_TIME);
     }
 
     @Override
@@ -350,12 +377,12 @@ public class JobQueryImpl extends AbstractQuery<JobQuery, Job> implements JobQue
 
     @Override
     public long executeCount(CommandContext commandContext) {
-        return CommandContextUtil.getJobEntityManager(commandContext).findJobCountByQueryCriteria(this);
+        return jobServiceConfiguration.getJobEntityManager().findJobCountByQueryCriteria(this);
     }
 
     @Override
     public List<Job> executeList(CommandContext commandContext) {
-        return CommandContextUtil.getJobEntityManager(commandContext).findJobsByQueryCriteria(this);
+        return jobServiceConfiguration.getJobEntityManager().findJobsByQueryCriteria(this);
     }
 
     // getters //////////////////////////////////////////
@@ -373,7 +400,7 @@ public class JobQueryImpl extends AbstractQuery<JobQuery, Job> implements JobQue
     }
 
     public Date getNow() {
-        return CommandContextUtil.getJobServiceConfiguration().getClock().getCurrentTime();
+        return jobServiceConfiguration.getClock().getCurrentTime();
     }
 
     public boolean isWithException() {
@@ -403,7 +430,7 @@ public class JobQueryImpl extends AbstractQuery<JobQuery, Job> implements JobQue
     public String getProcessDefinitionId() {
         return processDefinitionId;
     }
-    
+
     public String getCategory() {
         return category;
     }
@@ -434,6 +461,10 @@ public class JobQueryImpl extends AbstractQuery<JobQuery, Job> implements JobQue
 
     public String getScopeDefinitionId() {
         return scopeDefinitionId;
+    }
+
+    public String getCorrelationId() {
+        return correlationId;
     }
 
     public boolean isOnlyTimers() {
@@ -472,4 +503,7 @@ public class JobQueryImpl extends AbstractQuery<JobQuery, Job> implements JobQue
         return onlyUnlocked;
     }
 
+    public boolean isWithoutScopeType() {
+        return withoutScopeType;
+    }
 }

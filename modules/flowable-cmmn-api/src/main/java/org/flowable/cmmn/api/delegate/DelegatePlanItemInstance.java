@@ -36,10 +36,14 @@ public interface DelegatePlanItemInstance extends PlanItemInstance, VariableScop
     void setElementId(String elementId);
     void setPlanItemDefinitionId(String planItemDefinitionId);
     void setPlanItemDefinitionType(String planItemDefinitionType);
+    /**
+     * @deprecated use {@link #setCreateTime(Date)} instead
+     */
     @Deprecated
     void setStartTime(Date startTime);
     void setCreateTime(Date createTime);
     void setLastAvailableTime(Date availableTime);
+    void setLastUnavailableTime(Date availableTime);
     void setLastEnabledTime(Date enabledTime);
     void setLastDisabledTime(Date disabledTime);
     void setLastStartedTime(Date startedTime);
@@ -73,5 +77,12 @@ public interface DelegatePlanItemInstance extends PlanItemInstance, VariableScop
 
         return null;
     }
+
+    /**
+     * Create a snapshot read only delegate plan item instance of this delegate plan item instance.
+     *
+     * @return a {@link ReadOnlyDelegatePlanItemInstance}
+     */
+    ReadOnlyDelegatePlanItemInstance snapshotReadOnly();
 
 }

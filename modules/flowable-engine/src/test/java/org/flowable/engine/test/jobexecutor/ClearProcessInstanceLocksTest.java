@@ -24,7 +24,6 @@ import org.flowable.engine.impl.test.PluggableFlowableTestCase;
 import org.flowable.engine.runtime.Execution;
 import org.flowable.engine.test.Deployment;
 import org.flowable.job.api.Job;
-import org.flowable.job.service.impl.asyncexecutor.AcquiredJobEntities;
 import org.flowable.job.service.impl.cmd.AcquireJobsCmd;
 import org.flowable.job.service.impl.cmd.LockExclusiveJobCmd;
 import org.flowable.job.service.impl.persistence.entity.JobEntity;
@@ -84,9 +83,9 @@ public class ClearProcessInstanceLocksTest extends PluggableFlowableTestCase {
         // Acquire jobs (mimic the async executor behavior)
         List<JobInfoEntity> acquiredJobs = new ArrayList<>();
         while (acquiredJobs.size() < 5) {
-            AcquiredJobEntities acquiredJobEntities = processEngineConfiguration.getCommandExecutor()
+            List<? extends JobInfoEntity> jobs = processEngineConfiguration.getCommandExecutor()
                 .execute(new AcquireJobsCmd(processEngineConfiguration.getAsyncExecutor()));
-            acquiredJobs.addAll(acquiredJobEntities.getJobs());
+            acquiredJobs.addAll(jobs);
         }
 
         // Validate lock owner and time set after acquiring
@@ -94,10 +93,9 @@ public class ClearProcessInstanceLocksTest extends PluggableFlowableTestCase {
         for (JobInfoEntity acquiredJob : acquiredJobs) {
 
             // Mimic the async executor
-            processEngineConfiguration.getCommandExecutor().execute(new LockExclusiveJobCmd((Job) acquiredJob));
+            processEngineConfiguration.getCommandExecutor().execute(new LockExclusiveJobCmd((Job) acquiredJob, processEngineConfiguration.getJobServiceConfiguration()));
 
             // After locking, the lockowner should be shared by the job and the process instance
-            assertThat(acquiredJob.getLockOwner()).isNotNull();
             assertThat(acquiredJob.getLockOwner()).isEqualTo(processEngineConfiguration.getAsyncExecutor().getLockOwner());
             assertThat(acquiredJob.getLockExpirationTime()).isNotNull();
 
@@ -109,7 +107,7 @@ public class ClearProcessInstanceLocksTest extends PluggableFlowableTestCase {
         }
 
         // Clearing the locks should now remove the lock owner and lock time from all process instances
-        processEngineConfiguration.getCommandExecutor().execute(new ClearProcessInstanceLockTimesCmd());
+        processEngineConfiguration.getCommandExecutor().execute(new ClearProcessInstanceLockTimesCmd(processEngineConfiguration.getAsyncExecutor().getLockOwner()));
 
         for (Execution execution : runtimeService.createExecutionQuery().list()) {
             assertThat(((ExecutionEntity) execution).getLockTime()).isNull();

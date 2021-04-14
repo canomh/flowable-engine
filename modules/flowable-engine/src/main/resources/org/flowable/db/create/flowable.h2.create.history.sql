@@ -18,6 +18,7 @@ create table ACT_HI_PROCINST (
     CALLBACK_TYPE_ varchar(255),
     REFERENCE_ID_ varchar(255),
     REFERENCE_TYPE_ varchar(255),
+    PROPAGATED_STAGE_INST_ID_ varchar(255),
     primary key (ID_),
     unique (PROC_INST_ID_)
 );
@@ -36,6 +37,7 @@ create table ACT_HI_ACTINST (
     ASSIGNEE_ varchar(255),
     START_TIME_ timestamp not null,
     END_TIME_ timestamp,
+    TRANSACTION_ORDER_ integer,
     DURATION_ bigint,
     DELETE_REASON_ varchar(4000),
     TENANT_ID_ varchar(255) default '',

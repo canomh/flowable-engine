@@ -21,9 +21,9 @@ import org.flowable.cmmn.api.repository.CaseDefinition;
 import org.flowable.cmmn.api.repository.CaseDefinitionQuery;
 import org.flowable.cmmn.engine.impl.util.CommandContextUtil;
 import org.flowable.common.engine.api.FlowableIllegalArgumentException;
-import org.flowable.common.engine.impl.query.AbstractQuery;
 import org.flowable.common.engine.impl.interceptor.CommandContext;
 import org.flowable.common.engine.impl.interceptor.CommandExecutor;
+import org.flowable.common.engine.impl.query.AbstractQuery;
 
 /**
  * @author Joram Barrez
@@ -414,6 +414,14 @@ public class CaseDefinitionQueryImpl extends AbstractQuery<CaseDefinitionQuery, 
 
     public String getCategoryNotEquals() {
         return categoryNotEquals;
+    }
+
+    public String getAuthorizationUserId() {
+        return authorizationUserId;
+    }
+
+    public boolean isAuthorizationGroupsSet() {
+        return authorizationGroupsSet;
     }
 
     public String getTenantId() {

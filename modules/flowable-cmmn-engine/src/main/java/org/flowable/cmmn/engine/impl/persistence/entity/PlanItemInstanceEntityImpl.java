@@ -20,15 +20,21 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.flowable.cmmn.api.delegate.ReadOnlyDelegatePlanItemInstance;
+import org.flowable.cmmn.api.history.HistoricPlanItemInstance;
 import org.flowable.cmmn.api.listener.PlanItemInstanceLifecycleListener;
 import org.flowable.cmmn.engine.CmmnEngineConfiguration;
+import org.flowable.cmmn.engine.impl.delegate.ReadOnlyDelegatePlanItemInstanceImpl;
 import org.flowable.cmmn.engine.impl.repository.CaseDefinitionUtil;
 import org.flowable.cmmn.engine.impl.util.CommandContextUtil;
+import org.flowable.cmmn.engine.impl.util.ExpressionUtil;
 import org.flowable.cmmn.model.Case;
 import org.flowable.cmmn.model.FlowableListener;
 import org.flowable.cmmn.model.PlanFragment;
 import org.flowable.cmmn.model.PlanItem;
+import org.flowable.cmmn.model.RepetitionRule;
 import org.flowable.common.engine.api.scope.ScopeTypes;
+import org.flowable.variable.service.VariableServiceConfiguration;
 import org.flowable.variable.service.impl.persistence.entity.VariableInstanceEntity;
 import org.flowable.variable.service.impl.persistence.entity.VariableScopeImpl;
 
@@ -51,6 +57,7 @@ public class PlanItemInstanceEntityImpl extends AbstractCmmnEngineVariableScopeE
     protected String state;
     protected Date createTime;
     protected Date lastAvailableTime;
+    protected Date lastUnavailableTime;
     protected Date lastEnabledTime;
     protected Date lastDisabledTime;
     protected Date lastStartedTime;
@@ -83,6 +90,43 @@ public class PlanItemInstanceEntityImpl extends AbstractCmmnEngineVariableScopeE
     protected PlanItemInstanceLifecycleListener currentLifecycleListener; // Only set when executing an plan item lifecycle listener
     protected FlowableListener currentFlowableListener; // Only set when executing an plan item lifecycle listener
 
+    public PlanItemInstanceEntityImpl() {
+    }
+
+    public PlanItemInstanceEntityImpl(HistoricPlanItemInstance historicPlanItemInstance) {
+        setId(historicPlanItemInstance.getId());
+        setName(historicPlanItemInstance.getName());
+        setState(historicPlanItemInstance.getState());
+        setCaseDefinitionId(historicPlanItemInstance.getCaseDefinitionId());
+        setDerivedCaseDefinitionId(historicPlanItemInstance.getDerivedCaseDefinitionId());
+        setCaseInstanceId(historicPlanItemInstance.getCaseInstanceId());
+        setStageInstanceId(historicPlanItemInstance.getStageInstanceId());
+        setStage(historicPlanItemInstance.isStage());
+        setElementId(historicPlanItemInstance.getElementId());
+        setPlanItemDefinitionId(historicPlanItemInstance.getPlanItemDefinitionId());
+        setPlanItemDefinitionType(historicPlanItemInstance.getPlanItemDefinitionType());
+        setCreateTime(historicPlanItemInstance.getCreateTime());
+        setLastAvailableTime(historicPlanItemInstance.getLastAvailableTime());
+        setLastUnavailableTime(historicPlanItemInstance.getLastUnavailableTime());
+        setLastEnabledTime(historicPlanItemInstance.getLastEnabledTime());
+        setLastDisabledTime(historicPlanItemInstance.getLastDisabledTime());
+        setLastStartedTime(historicPlanItemInstance.getLastStartedTime());
+        setLastSuspendedTime(historicPlanItemInstance.getLastSuspendedTime());
+        setCompletedTime(historicPlanItemInstance.getCompletedTime());
+        setOccurredTime(historicPlanItemInstance.getOccurredTime());
+        setTerminatedTime(historicPlanItemInstance.getTerminatedTime());
+        setExitTime(historicPlanItemInstance.getExitTime());
+        setEndedTime(historicPlanItemInstance.getEndedTime());
+        setStartUserId(historicPlanItemInstance.getStartUserId());
+        setReferenceId(historicPlanItemInstance.getReferenceId());
+        setReferenceType(historicPlanItemInstance.getReferenceType());
+        setEntryCriterionId(historicPlanItemInstance.getEntryCriterionId());
+        setExitCriterionId(historicPlanItemInstance.getExitCriterionId());
+        setFormKey(historicPlanItemInstance.getFormKey());
+        setExtraValue(historicPlanItemInstance.getExtraValue());
+        setTenantId(historicPlanItemInstance.getTenantId());
+    }
+
     @Override
     public Object getPersistentState() {
         Map<String, Object> persistentState = new HashMap<>();
@@ -98,6 +142,7 @@ public class PlanItemInstanceEntityImpl extends AbstractCmmnEngineVariableScopeE
         persistentState.put("state", state);
         persistentState.put("createTime", createTime);
         persistentState.put("lastAvailableTime", lastAvailableTime);
+        persistentState.put("lastUnavailableTime", lastUnavailableTime);
         persistentState.put("lastEnabledTime", lastEnabledTime);
         persistentState.put("lastDisabledTime", lastDisabledTime);
         persistentState.put("lastStartedTime", lastStartedTime);
@@ -121,6 +166,11 @@ public class PlanItemInstanceEntityImpl extends AbstractCmmnEngineVariableScopeE
         return persistentState;
     }
     
+    @Override
+    public ReadOnlyDelegatePlanItemInstance snapshotReadOnly() {
+        return new ReadOnlyDelegatePlanItemInstanceImpl(this);
+    }
+
     @Override
     public PlanItem getPlanItem() {
         if (planItem == null) {
@@ -240,6 +290,14 @@ public class PlanItemInstanceEntityImpl extends AbstractCmmnEngineVariableScopeE
     @Override
     public void setLastAvailableTime(Date lastAvailableTime) {
         this.lastAvailableTime = lastAvailableTime;
+    }
+    @Override
+    public Date getLastUnavailableTime() {
+        return lastUnavailableTime;
+    }
+    @Override
+    public void setLastUnavailableTime(Date lastUnavailableTime) {
+        this.lastUnavailableTime = lastUnavailableTime;
     }
     @Override
     public Date getLastEnabledTime() {
@@ -447,11 +505,15 @@ public class PlanItemInstanceEntityImpl extends AbstractCmmnEngineVariableScopeE
 
     @Override
     protected Collection<VariableInstanceEntity> loadVariableInstances() {
-        return CommandContextUtil.getVariableService().findVariableInstanceBySubScopeIdAndScopeType(id, ScopeTypes.CMMN);
+        return getVariableServiceConfiguration().getVariableService().findVariableInstanceBySubScopeIdAndScopeType(id, ScopeTypes.CMMN);
     }
 
     @Override
-    protected VariableScopeImpl getParentVariableScope() {
+    public VariableScopeImpl getParentVariableScope() {
+        PlanItemInstanceEntity stagePlanItem = getStagePlanItemInstanceEntity();
+        if (stagePlanItem != null) {
+            return (VariableScopeImpl) stagePlanItem;
+        }
         if (caseInstanceId != null) {
             return (VariableScopeImpl) CommandContextUtil.getCaseInstanceEntityManager().findById(caseInstanceId);
         }
@@ -464,7 +526,23 @@ public class PlanItemInstanceEntityImpl extends AbstractCmmnEngineVariableScopeE
         variableInstance.setSubScopeId(id);
         variableInstance.setScopeType(ScopeTypes.CMMN);
     }
-    
+
+    @Override
+    protected boolean storeVariableLocal(String variableName) {
+        if (super.storeVariableLocal(variableName)) {
+            return true;
+        }
+
+        RepetitionRule repetitionRule = ExpressionUtil.getRepetitionRule(this);
+        if (repetitionRule != null && repetitionRule.getAggregations() != null) {
+            // If this is a plan item with a repetition rule and has aggregations then we need to store the variables locally
+            // Checking for the aggregations is for backwards compatibility
+            return true;
+        }
+
+        return false;
+    }
+
     @Override
     protected void addLoggingSessionInfo(ObjectNode loggingNode) {
         // TODO
@@ -478,17 +556,32 @@ public class PlanItemInstanceEntityImpl extends AbstractCmmnEngineVariableScopeE
 
     @Override
     protected VariableInstanceEntity getSpecificVariable(String variableName) {
-        return CommandContextUtil.getVariableService().findVariableInstanceBySubScopeIdAndScopeTypeAndName(id, ScopeTypes.CMMN, variableName);
+        return getVariableServiceConfiguration().getVariableService()
+                .createInternalVariableInstanceQuery()
+                .subScopeId(id)
+                .scopeType(ScopeTypes.CMMN)
+                .name(variableName)
+                .singleResult();
     }
 
     @Override
     protected List<VariableInstanceEntity> getSpecificVariables(Collection<String> variableNames) {
-        return CommandContextUtil.getVariableService().findVariableInstancesBySubScopeIdAndScopeTypeAndNames(id, ScopeTypes.CMMN, variableNames);
+        return getVariableServiceConfiguration().getVariableService()
+                .createInternalVariableInstanceQuery()
+                .subScopeId(id)
+                .scopeType(ScopeTypes.CMMN)
+                .names(variableNames)
+                .list();
     }
 
     @Override
     protected boolean isPropagateToHistoricVariable() {
         return true;
+    }
+
+    @Override
+    protected VariableServiceConfiguration getVariableServiceConfiguration() {
+        return CommandContextUtil.getCmmnEngineConfiguration().getVariableServiceConfiguration();
     }
 
     @Override

@@ -463,7 +463,7 @@ It’s possible to support additional variable-types with a custom JSON represen
 
 ## Deployment
 
-**When using tomcat, please read [Usage in Tomcat](restUsageInTomcat).**
+**When using Tomcat, please read [Usage in Tomcat](#usage-In-tomcat).**
 
 ### List of Deployments
 
@@ -2894,9 +2894,9 @@ Only one of processDefinitionId, processDefinitionKey or message can be used in 
     }
 
 The request body can contain all possible filters that can be used in the [List process instances](bpmn/ch15-REST.md#list-of-process-instances) URL query. On top of these, it’s possible to provide an array of variables
-to include in the query, with their format [described here](restQueryVariable).
+to include in the query, with their format [described here](#json-query-variable-format).
 
-The general [paging and sorting query-parameters](restPagingAndSort) can be used for this URL.
+The general [paging and sorting query-parameters](paging-and-sorting) can be used for this URL.
 
 <table>
 <caption>Query process instances - Response codes</caption>
@@ -3005,14 +3005,8 @@ The general [paging and sorting query-parameters](restPagingAndSort) can be used
 
 **Success response body:**
 
-    {
-       "id":"7",
-       "url":"http://localhost:8182/runtime/process-instances/7",
-       "businessKey":"myBusinessKey",
-       "suspended":false,
-       "processDefinitionUrl":"http://localhost:8182/repository/process-definitions/processOne%3A1%3A4",
-       "activityId":"processTask"
-    }
+    The response is a Blob object containing the binary data or null.
+    
 
 ### Get involved people for process instance
 
@@ -4160,9 +4154,9 @@ Returns all activities which are active in the execution and in all child-execut
     }
 
 The request body can contain all possible filters that can be used in the [List executions](bpmn/ch15-REST.md#list-of-executions) URL query. On top of these, it’s possible to provide an array of variables and processInstanceVariables
-to include in the query, with their format [described here](restQueryVariable).
+to include in the query, with their format [described here](#json-query-variable-format).
 
-The general [paging and sorting query-parameters](restPagingAndSort) can be used for this URL.
+The general [paging and sorting query-parameters](paging-and-sorting) can be used for this URL.
 
 <table>
 <caption>Query executions - Response codes</caption>
@@ -10258,23 +10252,23 @@ handling the signal will be done immediately and result (200 - OK) will only ret
 </tr>
 <tr class="odd">
 <td><p>tenantId</p></td>
-<td><p>No</p></td>
+<td><p>Only return jobs with the given tenantId.</p></td>
 <td><p>String</p></td>
 </tr>
 <tr class="even">
-<td><p>Only return jobs with the given tenantId.</p></td>
 <td><p>tenantIdLike</p></td>
-<td><p>No</p></td>
+<td><p>Only return jobs with a tenantId like the given value.</p></td>
+<td><p>String</p></td>
 </tr>
 <tr class="odd">
-<td><p>String</p></td>
-<td><p>Only return jobs with a tenantId like the given value.</p></td>
 <td><p>withoutTenantId</p></td>
+<td><p>If true, only returns jobs without a tenantId set. If false, the withoutTenantId parameter is ignored.</p></td>
+<td><p>Boolean</p></td>
 </tr>
 <tr class="even">
-<td><p>No</p></td>
+<td><p>withoutScopeType</p></td>
+<td><p>If true, only returns jobs without a scope type set. If false, the withoutScopeType parameter is ignored.</p></td>
 <td><p>Boolean</p></td>
-<td><p>If true, only returns jobs without a tenantId set. If false, the withoutTenantId parameter is ignored.</p></td>
 </tr>
 <tr class="odd">
 <td><p>sort</p></td>
@@ -10674,6 +10668,11 @@ handling the signal will be done immediately and result (200 - OK) will only ret
 <td><p>If true, only returns jobs which are unlocked. If false, this parameter is ignored.</p></td>
 </tr>
 <tr class="odd">
+<td><p>withoutScopeType</p></td>
+<td><p>Boolean</p></td>
+<td><p>If true, only returns jobs without a scope type set. If false, the withoutScopeType parameter is ignored.</p></td>
+</tr>
+<tr class="even">
 <td><p>sort</p></td>
 <td><p>Field to sort results on, should be one of id, dueDate, executionId, processInstanceId, retries or tenantId.</p></td>
 <td><p>String</p></td>

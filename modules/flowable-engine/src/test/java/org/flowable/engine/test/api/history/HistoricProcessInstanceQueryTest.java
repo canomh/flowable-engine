@@ -13,8 +13,11 @@
 package org.flowable.engine.test.api.history;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.flowable.common.engine.impl.history.HistoryLevel;
 import org.flowable.engine.history.HistoricProcessInstance;
@@ -22,6 +25,7 @@ import org.flowable.engine.impl.test.HistoryTestHelper;
 import org.flowable.engine.impl.test.PluggableFlowableTestCase;
 import org.flowable.engine.runtime.ProcessInstance;
 import org.flowable.engine.test.Deployment;
+import org.flowable.task.api.Task;
 import org.junit.jupiter.api.Test;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -38,9 +42,9 @@ public class HistoricProcessInstanceQueryTest extends PluggableFlowableTestCase 
 
         if (HistoryTestHelper.isHistoryLevelAtLeast(HistoryLevel.ACTIVITY, processEngineConfiguration)) {
             List<HistoricProcessInstance> processes = historyService.createHistoricProcessInstanceQuery().processInstanceId(processInstanceId).list();
-            assertThat(processes).hasSize(1);
-            assertThat(processes.get(0).getName()).isNull();
-            assertThat(processes.get(0).getDescription()).isNull();
+            assertThat(processes)
+                    .extracting(HistoricProcessInstance::getName, HistoricProcessInstance::getDescription)
+                    .containsExactly(tuple(null, null));
 
             ObjectNode infoNode = dynamicBpmnService.changeLocalizationName("en-GB", "historicProcessLocalization", "Historic Process Name 'en-GB'");
             dynamicBpmnService.changeLocalizationDescription("en-GB", "historicProcessLocalization", "Historic Process Description 'en-GB'", infoNode);
@@ -51,32 +55,33 @@ public class HistoricProcessInstanceQueryTest extends PluggableFlowableTestCase 
             dynamicBpmnService.saveProcessDefinitionInfo(processInstance.getProcessDefinitionId(), infoNode);
 
             processes = historyService.createHistoricProcessInstanceQuery().processInstanceId(processInstanceId).list();
-            assertThat(processes).hasSize(1);
-            assertThat(processes.get(0).getName()).isNull();
-            assertThat(processes.get(0).getDescription()).isNull();
+            assertThat(processes)
+                    .extracting(HistoricProcessInstance::getName, HistoricProcessInstance::getDescription)
+                    .containsExactly(tuple(null, null));
 
             processes = historyService.createHistoricProcessInstanceQuery().processInstanceId(processInstanceId).locale("en-GB").list();
-            assertThat(processes).hasSize(1);
-            assertThat(processes.get(0).getName()).isEqualTo("Historic Process Name 'en-GB'");
-            assertThat(processes.get(0).getDescription()).isEqualTo("Historic Process Description 'en-GB'");
+            assertThat(processes)
+                    .extracting(HistoricProcessInstance::getName, HistoricProcessInstance::getDescription)
+                    .containsExactly(tuple("Historic Process Name 'en-GB'", "Historic Process Description 'en-GB'"));
 
             processes = historyService.createHistoricProcessInstanceQuery().processInstanceId(processInstanceId).listPage(0, 10);
-            assertThat(processes).hasSize(1);
-            assertThat(processes.get(0).getName()).isNull();
-            assertThat(processes.get(0).getDescription()).isNull();
+            assertThat(processes)
+                    .extracting(HistoricProcessInstance::getName, HistoricProcessInstance::getDescription)
+                    .containsExactly(tuple(null, null));
 
             processes = historyService.createHistoricProcessInstanceQuery().processInstanceId(processInstanceId).locale("en-GB").listPage(0, 10);
-            assertThat(processes).hasSize(1);
-            assertThat(processes.get(0).getName()).isEqualTo("Historic Process Name 'en-GB'");
-            assertThat(processes.get(0).getDescription()).isEqualTo("Historic Process Description 'en-GB'");
+            assertThat(processes)
+                    .extracting(HistoricProcessInstance::getName, HistoricProcessInstance::getDescription)
+                    .containsExactly(tuple("Historic Process Name 'en-GB'", "Historic Process Description 'en-GB'"));
 
             HistoricProcessInstance process = historyService.createHistoricProcessInstanceQuery().processInstanceId(processInstanceId).singleResult();
             assertThat(process.getName()).isNull();
             assertThat(process.getDescription()).isNull();
 
             process = historyService.createHistoricProcessInstanceQuery().processInstanceId(processInstanceId).locale("en-GB").singleResult();
-            assertThat(process.getName()).isEqualTo("Historic Process Name 'en-GB'");
-            assertThat(process.getDescription()).isEqualTo("Historic Process Description 'en-GB'");
+            assertThat(processes)
+                    .extracting(HistoricProcessInstance::getName, HistoricProcessInstance::getDescription)
+                    .containsExactly(tuple("Historic Process Name 'en-GB'", "Historic Process Description 'en-GB'"));
 
             process = historyService.createHistoricProcessInstanceQuery().processInstanceId(processInstanceId).locale("en").singleResult();
             assertThat(process.getName()).isEqualTo("Historic Process Name 'en'");
@@ -108,16 +113,57 @@ public class HistoricProcessInstanceQueryTest extends PluggableFlowableTestCase 
                 .referenceId("testReferenceId")
                 .start();
 
-        assertThat(historyService.createHistoricProcessInstanceQuery().processInstanceReferenceId("testReferenceId").list())
-                .extracting(HistoricProcessInstance::getId)
-                .contains(processInstance.getId());
+        if (HistoryTestHelper.isHistoryLevelAtLeast(HistoryLevel.ACTIVITY, processEngineConfiguration)) {
 
-        assertThat(historyService.createHistoricProcessInstanceQuery().or()
-                .processInstanceReferenceId("testReferenceId").processInstanceName("doesn't exist").list())
-                .extracting(HistoricProcessInstance::getId)
-                .contains(processInstance.getId());
+            assertThat(historyService.createHistoricProcessInstanceQuery().processInstanceReferenceId("testReferenceId").list())
+                    .extracting(HistoricProcessInstance::getId)
+                    .contains(processInstance.getId());
 
-        assertThat(historyService.createHistoricProcessInstanceQuery().processInstanceReferenceId("invalid").list()).isEmpty();
+            assertThat(historyService.createHistoricProcessInstanceQuery().or()
+                    .processInstanceReferenceId("testReferenceId").processInstanceName("doesn't exist").list())
+                    .extracting(HistoricProcessInstance::getId)
+                    .contains(processInstance.getId());
+
+            assertThat(historyService.createHistoricProcessInstanceQuery().processInstanceReferenceId("invalid").list()).isEmpty();
+        }
+
+    }
+    
+    @Test
+    @Deployment(resources = { "org/flowable/engine/test/api/runtime/currentActivityTestProcess.bpmn20.xml" })
+    public void testQueryByActiveActivityId() {
+        ProcessInstance processInstance1 = runtimeService.createProcessInstanceBuilder()
+                .processDefinitionKey("currentActivityProcessTest")
+                .start();
+        
+        Task task = taskService.createTaskQuery().processInstanceId(processInstance1.getId()).singleResult();
+        taskService.complete(task.getId());
+        
+        ProcessInstance processInstance2 = runtimeService.createProcessInstanceBuilder()
+                .processDefinitionKey("currentActivityProcessTest")
+                .start();
+
+        if (HistoryTestHelper.isHistoryLevelAtLeast(HistoryLevel.ACTIVITY, processEngineConfiguration)) {
+
+            assertThat(historyService.createHistoricProcessInstanceQuery().activeActivityId("task3").singleResult().getId()).isEqualTo(processInstance1.getId());
+            assertThat(historyService.createHistoricProcessInstanceQuery().activeActivityId("task1").singleResult().getId()).isEqualTo(processInstance2.getId());
+            assertThat(historyService.createHistoricProcessInstanceQuery().activeActivityId("task2").count()).isZero();
+            
+            Set<String> activityIds = new HashSet<>();
+            activityIds.add("task1");
+            activityIds.add("task2");
+            assertThat(historyService.createHistoricProcessInstanceQuery().activeActivityIds(activityIds).singleResult().getId()).isEqualTo(processInstance2.getId());
+        
+            activityIds = new HashSet<>();
+            activityIds.add("task1");
+            activityIds.add("task3");
+            assertThat(historyService.createHistoricProcessInstanceQuery().activeActivityIds(activityIds).count()).isEqualTo(2);
+            
+            activityIds = new HashSet<>();
+            activityIds.add("task2");
+            activityIds.add("task3");
+            assertThat(historyService.createHistoricProcessInstanceQuery().activeActivityIds(activityIds).singleResult().getId()).isEqualTo(processInstance1.getId());
+        }
     }
     
     @Test
@@ -127,19 +173,22 @@ public class HistoricProcessInstanceQueryTest extends PluggableFlowableTestCase 
                 .processDefinitionKey("oneTaskProcess")
                 .start();
         runtimeService.addUserIdentityLink(processInstance.getId(), "kermit", "specialLink");
-        
-        assertEquals(1, runtimeService.createProcessInstanceQuery().involvedUser("kermit", "specialLink").count());
-        assertEquals(processInstance.getId(), runtimeService.createProcessInstanceQuery().involvedUser("kermit", "specialLink").singleResult().getId());
-        
-        assertEquals(0, runtimeService.createProcessInstanceQuery().involvedUser("kermit", "undefined").count());
-        
-        assertEquals(1, runtimeService.createProcessInstanceQuery().or().involvedUser("kermit", "specialLink").processDefinitionKey("undefined").endOr().count());
-        assertEquals(processInstance.getId(), runtimeService.createProcessInstanceQuery().or().involvedUser("kermit", "specialLink").processDefinitionKey("undefined").endOr().singleResult().getId());
-        
-        assertEquals(1, runtimeService.createProcessInstanceQuery().or().involvedUser("kermit", "specialLink").processDefinitionKey("subProcessQueryTest").endOr().count());
-        assertEquals(processInstance.getId(), runtimeService.createProcessInstanceQuery().or().involvedUser("kermit", "specialLink").processDefinitionKey("subProcessQueryTest").endOr().singleResult().getId());
-        
-        assertEquals(0, runtimeService.createProcessInstanceQuery().or().involvedUser("kermit", "undefined").processDefinitionKey("undefined").endOr().count());
+
+        if (HistoryTestHelper.isHistoryLevelAtLeast(HistoryLevel.ACTIVITY, processEngineConfiguration)) {
+
+            assertThat(historyService.createHistoricProcessInstanceQuery().involvedUser("kermit", "specialLink").count()).isEqualTo(1);
+            assertThat(historyService.createHistoricProcessInstanceQuery().involvedUser("kermit", "specialLink").singleResult().getId()).isEqualTo(processInstance.getId());
+
+            assertThat(historyService.createHistoricProcessInstanceQuery().involvedUser("kermit", "undefined").count()).isZero();
+
+            assertThat(historyService.createHistoricProcessInstanceQuery().or().involvedUser("kermit", "specialLink").processDefinitionKey("undefined").endOr().count()).isEqualTo(1);
+            assertThat(historyService.createHistoricProcessInstanceQuery().or().involvedUser("kermit", "specialLink").processDefinitionKey("undefined").endOr().singleResult().getId()).isEqualTo(processInstance.getId());
+
+            assertThat(historyService.createHistoricProcessInstanceQuery().or().involvedUser("kermit", "specialLink").processDefinitionKey("subProcessQueryTest").endOr().count()).isEqualTo(1);
+            assertThat(historyService.createHistoricProcessInstanceQuery().or().involvedUser("kermit", "specialLink").processDefinitionKey("subProcessQueryTest").endOr().singleResult().getId()).isEqualTo(processInstance.getId());
+
+            assertThat(historyService.createHistoricProcessInstanceQuery().or().involvedUser("kermit", "undefined").processDefinitionKey("undefined").endOr().count()).isZero();
+        }
     }
     
     @Test
@@ -149,19 +198,23 @@ public class HistoricProcessInstanceQueryTest extends PluggableFlowableTestCase 
                 .processDefinitionKey("oneTaskProcess")
                 .start();
         runtimeService.addGroupIdentityLink(processInstance.getId(), "sales", "specialLink");
-        
-        assertEquals(1, runtimeService.createProcessInstanceQuery().involvedGroup("sales", "specialLink").count());
-        assertEquals(processInstance.getId(), runtimeService.createProcessInstanceQuery().involvedGroup("sales", "specialLink").singleResult().getId());
-        
-        assertEquals(0, runtimeService.createProcessInstanceQuery().involvedGroup("sales", "undefined").count());
-        
-        assertEquals(1, runtimeService.createProcessInstanceQuery().or().involvedGroup("sales", "specialLink").processDefinitionKey("undefined").endOr().count());
-        assertEquals(processInstance.getId(), runtimeService.createProcessInstanceQuery().or().involvedGroup("sales", "specialLink").processDefinitionKey("undefined").endOr().singleResult().getId());
-        
-        assertEquals(1, runtimeService.createProcessInstanceQuery().or().involvedGroup("sales", "specialLink").processDefinitionKey("subProcessQueryTest").endOr().count());
-        assertEquals(processInstance.getId(), runtimeService.createProcessInstanceQuery().or().involvedGroup("sales", "specialLink").processDefinitionKey("subProcessQueryTest").endOr().singleResult().getId());
-        
-        assertEquals(0, runtimeService.createProcessInstanceQuery().or().involvedGroup("sales", "undefined").processDefinitionKey("undefined").endOr().count());
+
+        if (HistoryTestHelper.isHistoryLevelAtLeast(HistoryLevel.ACTIVITY, processEngineConfiguration)) {
+
+            assertThat(historyService.createHistoricProcessInstanceQuery().involvedGroup("sales", "specialLink").count()).isEqualTo(1);
+            assertThat(historyService.createHistoricProcessInstanceQuery().involvedGroup("sales", "specialLink").singleResult().getId()).isEqualTo(processInstance.getId());
+
+            assertThat(historyService.createHistoricProcessInstanceQuery().involvedGroup("sales", "undefined").count()).isZero();
+
+            assertThat(historyService.createHistoricProcessInstanceQuery().or().involvedGroup("sales", "specialLink").processDefinitionKey("undefined").endOr().count()).isEqualTo(1);
+            assertThat(historyService.createHistoricProcessInstanceQuery().or().involvedGroup("sales", "specialLink").processDefinitionKey("undefined").endOr().singleResult().getId()).isEqualTo(processInstance.getId());
+
+            assertThat(historyService.createHistoricProcessInstanceQuery().or().involvedGroup("sales", "specialLink").processDefinitionKey("subProcessQueryTest").endOr().count()).isEqualTo(1);
+            assertThat(historyService.createHistoricProcessInstanceQuery().or().involvedGroup("sales", "specialLink").processDefinitionKey("subProcessQueryTest").endOr().singleResult().getId()).isEqualTo(processInstance.getId());
+
+            assertThat(historyService.createHistoricProcessInstanceQuery().or().involvedGroup("sales", "undefined").processDefinitionKey("undefined").endOr().count()).isZero();
+        }
+
     }
 
     @Test
@@ -172,16 +225,19 @@ public class HistoricProcessInstanceQueryTest extends PluggableFlowableTestCase 
                 .referenceType("testReferenceType")
                 .start();
 
-        assertThat(historyService.createHistoricProcessInstanceQuery().processInstanceReferenceType("testReferenceType").list())
-                .extracting(HistoricProcessInstance::getId)
-                .contains(processInstance.getId());
+        if (HistoryTestHelper.isHistoryLevelAtLeast(HistoryLevel.ACTIVITY, processEngineConfiguration)) {
 
-        assertThat(historyService.createHistoricProcessInstanceQuery().or()
-                .processInstanceReferenceType("testReferenceType").processInstanceName("doesn't exist").list())
-                .extracting(HistoricProcessInstance::getId)
-                .contains(processInstance.getId());
+            assertThat(historyService.createHistoricProcessInstanceQuery().processInstanceReferenceType("testReferenceType").list())
+                    .extracting(HistoricProcessInstance::getId)
+                    .contains(processInstance.getId());
 
-        assertThat(historyService.createHistoricProcessInstanceQuery().processInstanceReferenceType("invalid").list()).isEmpty();
+            assertThat(historyService.createHistoricProcessInstanceQuery().or()
+                    .processInstanceReferenceType("testReferenceType").processInstanceName("doesn't exist").list())
+                    .extracting(HistoricProcessInstance::getId)
+                    .contains(processInstance.getId());
+
+            assertThat(historyService.createHistoricProcessInstanceQuery().processInstanceReferenceType("invalid").list()).isEmpty();
+        }
     }
 
     @Test
@@ -199,12 +255,107 @@ public class HistoricProcessInstanceQueryTest extends PluggableFlowableTestCase 
             ids[i] = processInstance.getId();
         }
 
-        assertThat(historyService.createHistoricProcessInstanceQuery()
-                .processInstanceReferenceId("testReferenceId")
-                .processInstanceReferenceType("testReferenceType").list())
-                .extracting(HistoricProcessInstance::getId)
-                .containsExactlyInAnyOrder(ids);
+        if (HistoryTestHelper.isHistoryLevelAtLeast(HistoryLevel.ACTIVITY, processEngineConfiguration)) {
 
+            assertThat(historyService.createHistoricProcessInstanceQuery()
+                    .processInstanceReferenceId("testReferenceId")
+                    .processInstanceReferenceType("testReferenceType").list())
+                    .extracting(HistoricProcessInstance::getId)
+                    .containsExactlyInAnyOrder(ids);
+        }
+
+    }
+
+    @Test
+    public void testQueryVariableValueEqualsAndNotEquals() {
+        deployOneTaskTestProcess();
+        ProcessInstance processWithStringValue = runtimeService.createProcessInstanceBuilder()
+                .processDefinitionKey("oneTaskProcess")
+                .name("With string value")
+                .variable("var", "TEST")
+                .start();
+
+        ProcessInstance processWithNullValue = runtimeService.createProcessInstanceBuilder()
+                .processDefinitionKey("oneTaskProcess")
+                .name("With null value")
+                .variable("var", null)
+                .start();
+
+        ProcessInstance processWithLongValue = runtimeService.createProcessInstanceBuilder()
+                .processDefinitionKey("oneTaskProcess")
+                .name("With long value")
+                .variable("var", 100L)
+                .start();
+
+        ProcessInstance processWithDoubleValue = runtimeService.createProcessInstanceBuilder()
+                .processDefinitionKey("oneTaskProcess")
+                .name("With double value")
+                .variable("var", 45.55)
+                .start();
+
+        if (HistoryTestHelper.isHistoryLevelAtLeast(HistoryLevel.ACTIVITY, processEngineConfiguration)) {
+
+            assertThat(historyService.createHistoricProcessInstanceQuery().variableValueNotEquals("var", "TEST").list())
+                    .extracting(HistoricProcessInstance::getName, HistoricProcessInstance::getId)
+                    .containsExactlyInAnyOrder(
+                            tuple("With null value", processWithNullValue.getId()),
+                            tuple("With long value", processWithLongValue.getId()),
+                            tuple("With double value", processWithDoubleValue.getId())
+                    );
+
+            assertThat(historyService.createHistoricProcessInstanceQuery().variableValueEquals("var", "TEST").list())
+                    .extracting(HistoricProcessInstance::getName, HistoricProcessInstance::getId)
+                    .containsExactlyInAnyOrder(
+                            tuple("With string value", processWithStringValue.getId())
+                    );
+
+            assertThat(historyService.createHistoricProcessInstanceQuery().variableValueNotEquals("var", 100L).list())
+                    .extracting(HistoricProcessInstance::getName, HistoricProcessInstance::getId)
+                    .containsExactlyInAnyOrder(
+                            tuple("With string value", processWithStringValue.getId()),
+                            tuple("With null value", processWithNullValue.getId()),
+                            tuple("With double value", processWithDoubleValue.getId())
+                    );
+
+            assertThat(historyService.createHistoricProcessInstanceQuery().variableValueEquals("var", 100L).list())
+                    .extracting(HistoricProcessInstance::getName, HistoricProcessInstance::getId)
+                    .containsExactlyInAnyOrder(
+                            tuple("With long value", processWithLongValue.getId())
+                    );
+
+            assertThat(historyService.createHistoricProcessInstanceQuery().variableValueNotEquals("var", 45.55).list())
+                    .extracting(HistoricProcessInstance::getName, HistoricProcessInstance::getId)
+                    .containsExactlyInAnyOrder(
+                            tuple("With string value", processWithStringValue.getId()),
+                            tuple("With null value", processWithNullValue.getId()),
+                            tuple("With long value", processWithLongValue.getId())
+                    );
+
+            assertThat(historyService.createHistoricProcessInstanceQuery().variableValueEquals("var", 45.55).list())
+                    .extracting(HistoricProcessInstance::getName, HistoricProcessInstance::getId)
+                    .containsExactlyInAnyOrder(
+                            tuple("With double value", processWithDoubleValue.getId())
+                    );
+
+            assertThat(historyService.createHistoricProcessInstanceQuery().variableValueNotEquals("var", "test").list())
+                    .extracting(HistoricProcessInstance::getName, HistoricProcessInstance::getId)
+                    .containsExactlyInAnyOrder(
+                            tuple("With string value", processWithStringValue.getId()),
+                            tuple("With null value", processWithNullValue.getId()),
+                            tuple("With long value", processWithLongValue.getId()),
+                            tuple("With double value", processWithDoubleValue.getId())
+                    );
+
+            assertThat(historyService.createHistoricProcessInstanceQuery().variableValueEquals("var", "test").list())
+                    .extracting(HistoricProcessInstance::getName, HistoricProcessInstance::getId)
+                    .isEmpty();
+
+            assertThat(historyService.createHistoricProcessInstanceQuery().variableValueEqualsIgnoreCase("var", "test").list())
+                    .extracting(HistoricProcessInstance::getName, HistoricProcessInstance::getId)
+                    .containsExactlyInAnyOrder(
+                            tuple("With string value", processWithStringValue.getId())
+                    );
+        }
     }
 
 }

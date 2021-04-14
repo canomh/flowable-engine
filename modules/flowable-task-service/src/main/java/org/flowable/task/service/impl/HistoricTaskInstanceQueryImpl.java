@@ -23,7 +23,6 @@ import org.flowable.common.engine.api.FlowableException;
 import org.flowable.common.engine.api.FlowableIllegalArgumentException;
 import org.flowable.common.engine.api.query.CacheAwareQuery;
 import org.flowable.common.engine.api.scope.ScopeTypes;
-import org.flowable.common.engine.impl.context.Context;
 import org.flowable.common.engine.impl.interceptor.CommandContext;
 import org.flowable.common.engine.impl.interceptor.CommandExecutor;
 import org.flowable.common.engine.impl.persistence.cache.EntityCache;
@@ -33,8 +32,7 @@ import org.flowable.task.api.history.HistoricTaskInstance;
 import org.flowable.task.api.history.HistoricTaskInstanceQuery;
 import org.flowable.task.service.TaskServiceConfiguration;
 import org.flowable.task.service.impl.persistence.entity.HistoricTaskInstanceEntity;
-import org.flowable.task.service.impl.util.CommandContextUtil;
-import org.flowable.variable.api.types.VariableTypes;
+import org.flowable.variable.service.VariableServiceConfiguration;
 import org.flowable.variable.service.impl.AbstractVariableQueryImpl;
 import org.flowable.variable.service.impl.QueryVariableValue;
 import org.flowable.variable.service.impl.persistence.entity.HistoricVariableInstanceEntity;
@@ -43,10 +41,14 @@ import org.flowable.variable.service.impl.persistence.entity.HistoricVariableIns
  * @author Tom Baeyens
  * @author Joram Barrez
  */
-public class HistoricTaskInstanceQueryImpl extends AbstractVariableQueryImpl<HistoricTaskInstanceQuery, HistoricTaskInstance> 
+public class HistoricTaskInstanceQueryImpl extends AbstractVariableQueryImpl<HistoricTaskInstanceQuery, HistoricTaskInstance>
         implements HistoricTaskInstanceQuery, CacheAwareQuery<HistoricTaskInstanceEntity> {
 
     private static final long serialVersionUID = 1L;
+    
+    protected TaskServiceConfiguration taskServiceConfiguration;
+    protected VariableServiceConfiguration variableServiceConfiguration;
+    
     protected String taskDefinitionId;
     protected String processDefinitionId;
     protected String processDefinitionKey;
@@ -74,6 +76,10 @@ public class HistoricTaskInstanceQueryImpl extends AbstractVariableQueryImpl<His
     protected String propagatedStageInstanceId;
     protected String processInstanceIdWithChildren;
     protected String caseInstanceIdWithChildren;
+    protected String caseDefinitionKey;
+    protected String caseDefinitionKeyLike;
+    protected String caseDefinitionKeyLikeIgnoreCase;
+    protected Collection<String> caseDefinitionKeys;
     protected String taskId;
     protected String taskName;
     protected String taskNameLike;
@@ -92,6 +98,8 @@ public class HistoricTaskInstanceQueryImpl extends AbstractVariableQueryImpl<His
     protected String taskAssignee;
     protected String taskAssigneeLike;
     protected String taskAssigneeLikeIgnoreCase;
+    protected boolean withAssignee;
+    protected boolean withoutAssignee;
     protected Collection<String> taskAssigneeIds;
     protected String taskDefinitionKey;
     protected String taskDefinitionKeyLike;
@@ -140,25 +148,32 @@ public class HistoricTaskInstanceQueryImpl extends AbstractVariableQueryImpl<His
     public HistoricTaskInstanceQueryImpl() {
     }
 
-    public HistoricTaskInstanceQueryImpl(CommandExecutor commandExecutor) {
-        super(commandExecutor);
+    public HistoricTaskInstanceQueryImpl(CommandExecutor commandExecutor, TaskServiceConfiguration taskServiceConfiguration, 
+            VariableServiceConfiguration variableServiceConfiguration) {
+        
+        super(commandExecutor, variableServiceConfiguration);
+        this.taskServiceConfiguration = taskServiceConfiguration;
+        this.variableServiceConfiguration = variableServiceConfiguration;
     }
 
-    public HistoricTaskInstanceQueryImpl(CommandExecutor commandExecutor, String databaseType) {
-        super(commandExecutor);
+    public HistoricTaskInstanceQueryImpl(CommandExecutor commandExecutor, String databaseType, 
+            TaskServiceConfiguration taskServiceConfiguration, VariableServiceConfiguration variableServiceConfiguration) {
+        
+        super(commandExecutor, variableServiceConfiguration);
         this.databaseType = databaseType;
+        this.taskServiceConfiguration = taskServiceConfiguration;
+        this.variableServiceConfiguration = variableServiceConfiguration;
     }
 
     @Override
     public long executeCount(CommandContext commandContext) {
         ensureVariablesInitialized();
 
-        TaskServiceConfiguration taskServiceConfiguration = CommandContextUtil.getTaskServiceConfiguration(commandContext);
         if (taskServiceConfiguration.getHistoricTaskQueryInterceptor() != null) {
             taskServiceConfiguration.getHistoricTaskQueryInterceptor().beforeHistoricTaskQueryExecute(this);
         }
 
-        return CommandContextUtil.getHistoricTaskInstanceEntityManager(commandContext).findHistoricTaskInstanceCountByQueryCriteria(this);
+        return taskServiceConfiguration.getHistoricTaskInstanceEntityManager().findHistoricTaskInstanceCountByQueryCriteria(this);
     }
 
     @Override
@@ -166,13 +181,12 @@ public class HistoricTaskInstanceQueryImpl extends AbstractVariableQueryImpl<His
         ensureVariablesInitialized();
         List<HistoricTaskInstance> tasks = null;
 
-        TaskServiceConfiguration taskServiceConfiguration = CommandContextUtil.getTaskServiceConfiguration(commandContext);
         if (taskServiceConfiguration.getHistoricTaskQueryInterceptor() != null) {
             taskServiceConfiguration.getHistoricTaskQueryInterceptor().beforeHistoricTaskQueryExecute(this);
         }
 
         if (includeTaskLocalVariables || includeProcessVariables || includeIdentityLinks) {
-            tasks = CommandContextUtil.getHistoricTaskInstanceEntityManager(commandContext).findHistoricTaskInstancesAndRelatedEntitiesByQueryCriteria(this);
+            tasks = taskServiceConfiguration.getHistoricTaskInstanceEntityManager().findHistoricTaskInstancesAndRelatedEntitiesByQueryCriteria(this);
 
             if (taskId != null) {
                 if (includeProcessVariables) {
@@ -183,7 +197,7 @@ public class HistoricTaskInstanceQueryImpl extends AbstractVariableQueryImpl<His
             }
 
         } else {
-            tasks = CommandContextUtil.getHistoricTaskInstanceEntityManager(commandContext).findHistoricTaskInstancesByQueryCriteria(this);
+            tasks = taskServiceConfiguration.getHistoricTaskInstanceEntityManager().findHistoricTaskInstancesByQueryCriteria(this);
         }
 
         if (tasks != null && taskServiceConfiguration.getInternalTaskLocalizationManager() != null && taskServiceConfiguration.isEnableLocalization()) {
@@ -225,10 +239,10 @@ public class HistoricTaskInstanceQueryImpl extends AbstractVariableQueryImpl<His
     @Override
     public void enhanceCachedValue(HistoricTaskInstanceEntity task) {
         if (includeProcessVariables) {
-            task.getQueryVariables().addAll(CommandContextUtil.getVariableServiceConfiguration().getHistoricVariableInstanceEntityManager()
+            task.getQueryVariables().addAll(variableServiceConfiguration.getHistoricVariableInstanceEntityManager()
                     .findHistoricalVariableInstancesByProcessInstanceId(task.getProcessInstanceId()));
         } else if (includeTaskLocalVariables) {
-            task.getQueryVariables().addAll(CommandContextUtil.getVariableServiceConfiguration().getHistoricVariableInstanceEntityManager()
+            task.getQueryVariables().addAll(variableServiceConfiguration.getHistoricVariableInstanceEntityManager()
                     .findHistoricalVariableInstancesByTaskId(task.getId()));
         }
     }
@@ -325,6 +339,46 @@ public class HistoricTaskInstanceQueryImpl extends AbstractVariableQueryImpl<His
         } else {
             this.scopeDefinitionId(caseDefinitionId);
             this.scopeType(ScopeTypes.CMMN);
+        }
+        return this;
+    }
+
+    @Override
+    public HistoricTaskInstanceQueryImpl caseDefinitionKey(String caseDefinitionKey) {
+        if (inOrStatement) {
+            currentOrQueryObject.caseDefinitionKey = caseDefinitionKey;
+        } else {
+            this.caseDefinitionKey = caseDefinitionKey;
+        }
+        return this;
+    }
+
+    @Override
+    public HistoricTaskInstanceQueryImpl caseDefinitionKeyLike(String caseDefinitionKeyLike) {
+        if (inOrStatement) {
+            currentOrQueryObject.caseDefinitionKeyLike = caseDefinitionKeyLike;
+        } else {
+            this.caseDefinitionKeyLike = caseDefinitionKeyLike;
+        }
+        return this;
+    }
+
+    @Override
+    public HistoricTaskInstanceQueryImpl caseDefinitionKeyLikeIgnoreCase(String caseDefinitionKeyLikeIgnoreCase) {
+        if (inOrStatement) {
+            currentOrQueryObject.caseDefinitionKeyLikeIgnoreCase = caseDefinitionKeyLikeIgnoreCase;
+        } else {
+            this.caseDefinitionKeyLikeIgnoreCase = caseDefinitionKeyLikeIgnoreCase;
+        }
+        return this;
+    }
+
+    @Override
+    public HistoricTaskInstanceQueryImpl caseDefinitionKeyIn(Collection<String> caseDefinitionKeys) {
+        if (inOrStatement) {
+            currentOrQueryObject.caseDefinitionKeys = caseDefinitionKeys;
+        } else {
+            this.caseDefinitionKeys = caseDefinitionKeys;
         }
         return this;
     }
@@ -771,6 +825,28 @@ public class HistoricTaskInstanceQueryImpl extends AbstractVariableQueryImpl<His
     }
 
     @Override
+    public HistoricTaskInstanceQuery taskUnassigned() {
+        if (inOrStatement) {
+            this.currentOrQueryObject.withoutAssignee = true;
+        }
+        else {
+            this.withoutAssignee = true;
+        }
+        return this;
+    }
+
+    @Override
+    public HistoricTaskInstanceQuery taskAssigned() {
+        if (inOrStatement) {
+            this.currentOrQueryObject.withAssignee = true;
+        }
+        else {
+            this.withAssignee = true;
+        }
+        return this;
+    }
+
+    @Override
     public HistoricTaskInstanceQuery taskAssigneeIds(Collection<String> assigneeIds) {
         if (assigneeIds == null) {
             throw new FlowableIllegalArgumentException("Task assignee list is null");
@@ -1194,9 +1270,8 @@ public class HistoricTaskInstanceQueryImpl extends AbstractVariableQueryImpl<His
 
     @Override
     protected void ensureVariablesInitialized() {
-        VariableTypes types = CommandContextUtil.getVariableServiceConfiguration().getVariableTypes();
         for (QueryVariableValue var : queryVariableValues) {
-            var.initialize(types);
+            var.initialize(variableServiceConfiguration);
         }
 
         for (HistoricTaskInstanceQueryImpl orQueryObject : orQueryObjects) {
@@ -1525,7 +1600,11 @@ public class HistoricTaskInstanceQueryImpl extends AbstractVariableQueryImpl<His
         }
 
         inOrStatement = true;
-        currentOrQueryObject = new HistoricTaskInstanceQueryImpl();
+        if (databaseType != null) {
+            currentOrQueryObject = new HistoricTaskInstanceQueryImpl(commandExecutor, databaseType, taskServiceConfiguration, variableServiceConfiguration);
+        } else {
+            currentOrQueryObject = new HistoricTaskInstanceQueryImpl(commandExecutor, taskServiceConfiguration, variableServiceConfiguration);
+        }
         orQueryObjects.add(currentOrQueryObject);
         return this;
     }
@@ -1709,7 +1788,7 @@ public class HistoricTaskInstanceQueryImpl extends AbstractVariableQueryImpl<His
 
     protected Collection<String> getGroupsForCandidateUser(String candidateUser) {
         Collection<String> groupIds = new ArrayList<>();
-        IdmIdentityService idmIdentityService = CommandContextUtil.getTaskServiceConfiguration().getIdmIdentityService();
+        IdmIdentityService idmIdentityService = taskServiceConfiguration.getIdmIdentityService();
         if (idmIdentityService != null) {
             List<Group> groups = idmIdentityService.createGroupQuery().groupMember(candidateUser).list();
             for (Group group : groups) {
@@ -1723,11 +1802,11 @@ public class HistoricTaskInstanceQueryImpl extends AbstractVariableQueryImpl<His
     public void delete() {
         if (commandExecutor != null) {
             commandExecutor.execute(context -> {
-                CommandContextUtil.getHistoricTaskInstanceEntityManager(context).deleteHistoricTaskInstances(this);
+                taskServiceConfiguration.getHistoricTaskInstanceEntityManager().deleteHistoricTaskInstances(this);
                 return null;
             });
         } else {
-            CommandContextUtil.getHistoricTaskInstanceEntityManager(Context.getCommandContext()).deleteHistoricTaskInstances(this);
+            taskServiceConfiguration.getHistoricTaskInstanceEntityManager().deleteHistoricTaskInstances(this);
         }
     }
 
@@ -1986,6 +2065,14 @@ public class HistoricTaskInstanceQueryImpl extends AbstractVariableQueryImpl<His
     public String getTaskAssigneeLike() {
         return taskAssigneeLike;
     }
+    
+    public boolean isWithAssignee() {
+        return withAssignee;
+    }
+    
+    public boolean isWithoutAssignee() {
+        return withoutAssignee;
+    }
 
     public Collection<String> getTaskAssigneeIds() {
         return taskAssigneeIds;
@@ -1994,7 +2081,7 @@ public class HistoricTaskInstanceQueryImpl extends AbstractVariableQueryImpl<His
     public String getTaskId() {
         return taskId;
     }
-    
+
     @Override
     public String getId() {
         return taskId;
@@ -2074,6 +2161,26 @@ public class HistoricTaskInstanceQueryImpl extends AbstractVariableQueryImpl<His
 
     public String getLocale() {
         return locale;
+    }
+
+    public String getCaseDefinitionKey() {
+        return caseDefinitionKey;
+    }
+
+    public String getCaseDefinitionKeyLike() {
+        return caseDefinitionKeyLike;
+    }
+
+    public String getCaseDefinitionKeyLikeIgnoreCase() {
+        return caseDefinitionKeyLikeIgnoreCase;
+    }
+
+    public Collection<String> getCaseDefinitionKeys() {
+        return caseDefinitionKeys;
+    }
+
+    public boolean isWithLocalizationFallback() {
+        return withLocalizationFallback;
     }
 
     public List<HistoricTaskInstanceQueryImpl> getOrQueryObjects() {

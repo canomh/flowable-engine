@@ -20,28 +20,14 @@ import org.flowable.cmmn.model.PlanItem;
 import org.flowable.cmmn.model.PlanItemDefinition;
 import org.flowable.cmmn.model.Stage;
 import org.flowable.cmmn.model.Task;
-import org.junit.Test;
+import org.flowable.test.cmmn.converter.util.CmmnXmlConverterTest;
 
 /**
  * @author Filip Hrisafov
  */
-public class TaskBlockingExpressionCmmnXmlConverterTest extends AbstractConverterTest {
+public class TaskBlockingExpressionCmmnXmlConverterTest {
 
-    private static final String CMMN_RESOURCE = "org/flowable/test/cmmn/converter/task-blocking-expression.cmmn";
-
-    @Test
-    public void convertXMLToModel() throws Exception {
-        CmmnModel cmmnModel = readXMLFile(CMMN_RESOURCE);
-        validateModel(cmmnModel);
-    }
-
-    @Test
-    public void convertModelToXML() throws Exception {
-        CmmnModel cmmnModel = readXMLFile(CMMN_RESOURCE);
-        CmmnModel parsedModel = exportAndReadXMLFile(cmmnModel);
-        validateModel(parsedModel);
-    }
-
+    @CmmnXmlConverterTest("org/flowable/test/cmmn/converter/task-blocking-expression.cmmn")
     public void validateModel(CmmnModel cmmnModel) {
         assertThat(cmmnModel).isNotNull();
         assertThat(cmmnModel.getCases()).hasSize(1);
@@ -58,10 +44,11 @@ public class TaskBlockingExpressionCmmnXmlConverterTest extends AbstractConverte
 
         PlanItem planItemTask1 = cmmnModel.findPlanItem("planItem1");
         PlanItemDefinition planItemDefinition = planItemTask1.getPlanItemDefinition();
-        assertThat(planItemDefinition).isInstanceOfSatisfying(Task.class, task -> {
-            assertThat(task.getBlockingExpression()).isEqualTo("${false}");
-            assertThat(task.isBlocking()).isTrue();
-        });
+        assertThat(planItemDefinition)
+                .isInstanceOfSatisfying(Task.class, task -> {
+                    assertThat(task.getBlockingExpression()).isEqualTo("${false}");
+                    assertThat(task.isBlocking()).isTrue();
+                });
     }
 
 }

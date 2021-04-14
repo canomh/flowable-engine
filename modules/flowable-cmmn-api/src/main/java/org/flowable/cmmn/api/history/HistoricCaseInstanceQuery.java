@@ -24,7 +24,8 @@ import org.flowable.common.engine.api.query.Query;
  * @author Joram Barrez
  * @author Tijs Rademakers
  */
-public interface HistoricCaseInstanceQuery extends Query<HistoricCaseInstanceQuery, HistoricCaseInstance>, DeleteQuery<HistoricCaseInstanceQuery, HistoricCaseInstance> {
+public interface
+HistoricCaseInstanceQuery extends Query<HistoricCaseInstanceQuery, HistoricCaseInstance>, DeleteQuery<HistoricCaseInstanceQuery, HistoricCaseInstance> {
 
     /**
      * Only select historic case instances with the given identifier.
@@ -130,6 +131,21 @@ public interface HistoricCaseInstanceQuery extends Query<HistoricCaseInstanceQue
      * Only select historic case instances that are started by the provided user identifier.
      */
     HistoricCaseInstanceQuery startedBy(String userId);
+
+    /**
+     * Only select historic case instance that are reactivated before the provided date time.
+     */
+    HistoricCaseInstanceQuery lastReactivatedBefore(Date beforeTime);
+
+    /**
+     * Only select historic case instance that are reactivated after the provided date time.
+     */
+    HistoricCaseInstanceQuery lastReactivatedAfter(Date afterTime);
+
+    /**
+     * Only select historic case instances that are reactivated by the provided user identifier.
+     */
+    HistoricCaseInstanceQuery lastReactivatedBy(String userId);
     
     /**
      * Only select historic case instances that have the provided callback identifier.
@@ -170,6 +186,16 @@ public interface HistoricCaseInstanceQuery extends Query<HistoricCaseInstanceQue
      * End an OR statement. Only one OR statement is allowed, for the second call to this method an exception will be thrown.
      */
     HistoricCaseInstanceQuery endOr();
+    
+    /**
+     * Select the historic case instances with an active plan item definition id equal to the provided definition id.
+     */
+    HistoricCaseInstanceQuery activePlanItemDefinitionId(String planItemDefinitionId);
+    
+    /**
+     * Select the historic case instances with an active plan item definition id equal to one of the provided definition ids.
+     */
+    HistoricCaseInstanceQuery activePlanItemDefinitionIds(Set<String> planItemDefinitionIds);
 
     /**
      * Select the historic case instances with which the user with the given id is involved.

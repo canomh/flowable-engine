@@ -17,6 +17,7 @@ import java.util.List;
 
 import org.flowable.cmmn.api.history.HistoricCaseInstance;
 import org.flowable.cmmn.api.history.HistoricCaseInstanceQuery;
+import org.flowable.cmmn.api.runtime.CaseInstance;
 import org.flowable.cmmn.engine.CmmnEngineConfiguration;
 import org.flowable.cmmn.engine.impl.history.HistoricCaseInstanceQueryImpl;
 import org.flowable.cmmn.engine.impl.persistence.entity.data.HistoricCaseInstanceDataManager;
@@ -34,8 +35,13 @@ public class HistoricCaseInstanceEntityManagerImpl
     }
     
     @Override
+    public HistoricCaseInstanceEntity create(CaseInstance caseInstance) {
+        return dataManager.create(caseInstance);
+    }
+
+    @Override
     public HistoricCaseInstanceQuery createHistoricCaseInstanceQuery() {
-        return new HistoricCaseInstanceQueryImpl(engineConfiguration.getCommandExecutor());
+        return new HistoricCaseInstanceQueryImpl(engineConfiguration.getCommandExecutor(), engineConfiguration);
     }
     
     @Override

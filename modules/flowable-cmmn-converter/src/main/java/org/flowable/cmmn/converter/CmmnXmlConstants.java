@@ -75,6 +75,7 @@ public interface CmmnXmlConstants {
     String ELEMENT_EXTENSION_ELEMENTS = "extensionElements";
     String ELEMENT_HTTP_RESPONSE_HANDLER = "httpResponseHandler";
     String ELEMENT_HTTP_REQUEST_HANDLER = "httpRequestHandler";
+    String ATTRIBUTE_HTTP_PARALLEL_IN_SAME_TRANSACTION = "parallelInSameTransaction";
 
     String ATTRIBUTE_TRIGGER_MODE = "triggerMode";
     String ATTRIBUTE_EXIT_EVENT_TYPE = "exitEventType";
@@ -85,6 +86,7 @@ public interface CmmnXmlConstants {
     String ELEMENT_REPETITION_RULE = "repetitionRule";
     String ELEMENT_COMPLETION_NEUTRAL_RULE = "completionNeutralRule";
     String ELEMENT_PARENT_COMPLETION_RULE = "parentCompletionRule";
+    String ELEMENT_REACTIVATION_RULE = "reactivationRule";
 
     String ELEMENT_PROCESS = "process";
     String ELEMENT_DECISION = "decision";
@@ -105,6 +107,8 @@ public interface CmmnXmlConstants {
     String ATTRIBUTE_IS_ASYNCHRONOUS = "async";
     String ATTRIBUTE_IS_EXCLUSIVE = "exclusive";
     String ATTRIBUTE_STORE_RESULT_AS_TRANSIENT = "storeResultVariableAsTransient";
+
+    String ATTRIBUTE_EXTERNAL_WORKER_TOPIC = "topic";
 
     String ATTRIBUTE_IS_AUTO_COMPLETE = "autoComplete";
     String ATTRIBUTE_AUTO_COMPLETE_CONDITION = "autoCompleteCondition";
@@ -148,6 +152,8 @@ public interface CmmnXmlConstants {
 
     String ATTRIBUTE_TYPE = "type";
 
+    String ATTRIBUTE_REACTIVATION_RULE_CONDITION = "reactivationRuleCondition";
+
     String ATTRIBUTE_CLASS = "class";
     String ATTRIBUTE_EXPRESSION = "expression";
     String ATTRIBUTE_DELEGATE_EXPRESSION = "delegateExpression";
@@ -174,6 +180,7 @@ public interface CmmnXmlConstants {
     String ATTRIBUTE_FORM_FIELD_VALIDATION = "formFieldValidation";
     String ATTRIBUTE_DUE_DATE = "dueDate";
     String ATTRIBUTE_CATEGORY = "category";
+    String ATTRIBUTE_TASK_ID_VARIABLE_NAME = "taskIdVariableName";
 
     String ATTRIBUTE_REPETITION_COUNTER_VARIABLE_NAME = "counterVariable";
     String ATTRIBUTE_REPETITION_MAX_INSTANCE_COUNT_NAME = "maxInstanceCount";
@@ -186,6 +193,7 @@ public interface CmmnXmlConstants {
     String ATTRIBUTE_EVENT_LISTENER_TYPE = "eventType"; // Note that this is the same as ELEMENT_EVENT_TYPE. We can't change this (backwards compatibility)
     String ATTRIBUTE_EVENT_LISTENER_AVAILABLE_CONDITION = "availableCondition";
     String ATTRIBUTE_EVENT_LISTENER_SIGNAL_REF = "signalRef";
+    String ATTRIBUTE_USER_EVENT_LISTENER_REACTIVATE = "reactivateEventListener";
 
     String ELEMENT_EVENT_TYPE = "eventType";
     String ELEMENT_EVENT_CORRELATION_PARAMETER = "eventCorrelationParameter";
@@ -193,6 +201,11 @@ public interface CmmnXmlConstants {
     String ELEMENT_EVENT_OUT_PARAMETER = "eventOutParameter";
     String START_EVENT_CORRELATION_CONFIGURATION = "startEventCorrelationConfiguration";
     String START_EVENT_CORRELATION_STORE_AS_UNIQUE_REFERENCE_ID = "storeAsUniqueReferenceId";
+
+    String ELEMENT_VARIABLE_AGGREGATION = "variableAggregation";
+    String ATTRIBUTE_VARIABLE_AGGREGATION_VARIABLE = "variable";
+    String ATTRIBUTE_VARIABLE_AGGREGATION_STORE_AS_TRANSIENT_VARIABLE = "storeAsTransientVariable";
+    String ATTRIBUTE_VARIABLE_AGGREGATION_CREATE_OVERVIEW = "createOverviewVariable";
 
     String ELEMENT_DI_CMMN = "CMMNDI";
     String ELEMENT_DI_DIAGRAM = "CMMNDiagram";

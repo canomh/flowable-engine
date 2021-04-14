@@ -27,7 +27,6 @@ import org.flowable.eventregistry.api.EventDeployment;
 import org.flowable.eventregistry.api.EventRegistry;
 import org.flowable.eventregistry.api.EventRepositoryService;
 import org.flowable.eventregistry.impl.EventRegistryEngineConfiguration;
-import org.flowable.eventregistry.test.EventDeploymentAnnotation;
 import org.flowable.job.api.Job;
 import org.flowable.task.api.Task;
 import org.junit.jupiter.api.AfterEach;
@@ -83,7 +82,7 @@ public class SendInternalEventTaskTest extends FlowableEventRegistryBpmnTestCase
         assertThat(job.getJobHandlerType()).isEqualTo(AsyncSendEventJobHandler.TYPE);
         assertThat(job.getElementId()).isEqualTo("sendEventTask");
 
-        JobTestHelper.waitForJobExecutorToProcessAllJobs(processEngineConfiguration, managementService, 500000000, 200);
+        JobTestHelper.waitForJobExecutorToProcessAllJobs(processEngineConfiguration, managementService, 5000, 200);
 
         assertThat(runtimeService.createProcessInstanceQuery().list())
                 .extracting(ProcessInstance::getProcessDefinitionKey)
@@ -139,14 +138,17 @@ public class SendInternalEventTaskTest extends FlowableEventRegistryBpmnTestCase
 
     }
 
+    @Override
     protected EventRepositoryService getEventRepositoryService() {
         return getEventRegistryEngineConfiguration().getEventRepositoryService();
     }
 
+    @Override
     protected EventRegistry getEventRegistry() {
         return getEventRegistryEngineConfiguration().getEventRegistry();
     }
 
+    @Override
     protected EventRegistryEngineConfiguration getEventRegistryEngineConfiguration() {
         return (EventRegistryEngineConfiguration) processEngineConfiguration.getEngineConfigurations()
                 .get(EngineConfigurationConstants.KEY_EVENT_REGISTRY_CONFIG);

@@ -74,7 +74,12 @@ public class DefaultSpringEventRegistryChangeDetectionExecutor implements EventR
     }
 
     @Override
-    public void destroy() throws Exception {
+    public void shutdown() {
+        destroy();
+    }
+
+    @Override
+    public void destroy() {
         if (threadPoolTaskScheduler != null) {
             threadPoolTaskScheduler.destroy();
         }
@@ -83,6 +88,7 @@ public class DefaultSpringEventRegistryChangeDetectionExecutor implements EventR
     public EventRegistryChangeDetectionManager getEventRegistryChangeDetectionManager() {
         return eventRegistryChangeDetectionManager;
     }
+    @Override
     public void setEventRegistryChangeDetectionManager(EventRegistryChangeDetectionManager eventRegistryChangeDetectionManager) {
         this.eventRegistryChangeDetectionManager = eventRegistryChangeDetectionManager;
     }

@@ -52,8 +52,7 @@
         LAST_UPDATED_TIME_
       ) values (
         #{id ,jdbcType=VARCHAR},
-        1,
-        #{taskDefinitionId, jdbcType=VARCHAR},
+        1, #{taskDefinitionId, jdbcType=VARCHAR},
         #{processDefinitionId, jdbcType=VARCHAR},
         #{processInstanceId, jdbcType=VARCHAR},
         #{executionId, jdbcType=VARCHAR},
@@ -115,8 +114,7 @@
       ) values
         <foreach collection="list" item="historicTask" index="index" separator=",">
           (#{historicTask.id ,jdbcType=VARCHAR},
-           1,
-           #{historicTask.taskDefinitionId, jdbcType=VARCHAR},
+           1, #{historicTask.taskDefinitionId, jdbcType=VARCHAR},
            #{historicTask.processDefinitionId, jdbcType=VARCHAR},
            #{historicTask.processInstanceId, jdbcType=VARCHAR},
            #{historicTask.executionId, jdbcType=VARCHAR},
@@ -179,8 +177,7 @@
             LAST_UPDATED_TIME_
           ) VALUES
             (#{historicTask.id ,jdbcType=VARCHAR},
-             1,
-             #{historicTask.taskDefinitionId, jdbcType=VARCHAR},
+             1, #{historicTask.taskDefinitionId, jdbcType=VARCHAR},
              #{historicTask.processDefinitionId, jdbcType=VARCHAR},
              #{historicTask.processInstanceId, jdbcType=VARCHAR},
              #{historicTask.executionId, jdbcType=VARCHAR},
@@ -304,7 +301,7 @@
   </delete>
   
   <delete id="bulkDeleteHistoricTaskInstancesForNonExistingProcessInstances" parameterType="java.util.Map">
-    delete <if test="_databaseId != 'postgres' and _databaseId != 'db2'"> TASK </if> from ${prefix}ACT_HI_TASKINST TASK where TASK.PROC_INST_ID_ is not null and TASK.PROC_INST_ID_ != '' and
+    delete <if test="_databaseId != 'postgres' and _databaseId != 'cockroachdb' and _databaseId != 'db2'"> TASK </if> from ${prefix}ACT_HI_TASKINST TASK where TASK.PROC_INST_ID_ is not null and TASK.PROC_INST_ID_ != '' and
     NOT EXISTS (select PROCINST.ID_ from ${prefix}ACT_HI_PROCINST PROCINST where TASK.PROC_INST_ID_ = PROCINST.ID_)
   </delete>
   
@@ -319,18 +316,18 @@
   </delete>
   
   <delete id="bulkDeleteHistoricTaskInstancesForNonExistingCaseInstances" parameterType="java.util.Map">
-    delete <if test="_databaseId != 'postgres' and _databaseId != 'db2'"> TASK </if> from ${prefix}ACT_HI_TASKINST TASK where TASK.SCOPE_ID_ is not null and TASK.SCOPE_ID_ != '' and TASK.SCOPE_TYPE_ = 'cmmn' and
-    NOT EXISTS (select CASEINST.ID_ from ${prefix}ACT_CMMN_RU_CASE_INST CASEINST where TASK.SCOPE_ID_ = CASEINST.ID_)
+    delete <if test="_databaseId != 'postgres' and _databaseId != 'cockroachdb' and _databaseId != 'db2'"> TASK </if> from ${prefix}ACT_HI_TASKINST TASK where TASK.SCOPE_ID_ is not null and TASK.SCOPE_ID_ != '' and TASK.SCOPE_TYPE_ = 'cmmn' and
+    NOT EXISTS (select CASEINST.ID_ from ${prefix}ACT_CMMN_HI_CASE_INST CASEINST where TASK.SCOPE_ID_ = CASEINST.ID_)
   </delete>
   
   <delete id="bulkDeleteHistoricTaskInstancesForNonExistingCaseInstances" parameterType="java.util.Map" databaseId="oracle">
     delete from ${prefix}ACT_HI_TASKINST TASK where TASK.SCOPE_ID_ is not null and TASK.SCOPE_TYPE_ = 'cmmn' and
-    NOT EXISTS (select CASEINST.ID_ from ${prefix}ACT_CMMN_RU_CASE_INST CASEINST where TASK.SCOPE_ID_ = CASEINST.ID_)
+    NOT EXISTS (select CASEINST.ID_ from ${prefix}ACT_CMMN_HI_CASE_INST CASEINST where TASK.SCOPE_ID_ = CASEINST.ID_)
   </delete>
 
   <delete id="bulkDeleteHistoricTaskInstancesForNonExistingCaseInstances" databaseId="h2" parameterType="java.util.Map">
     delete from ${prefix}ACT_HI_TASKINST where SCOPE_ID_ is not null and SCOPE_ID_ != '' and SCOPE_TYPE_ = 'cmmn' and
-    SCOPE_ID_ NOT IN (select CASEINST.ID_ from ${prefix}ACT_CMMN_RU_CASE_INST CASEINST)
+    SCOPE_ID_ NOT IN (select CASEINST.ID_ from ${prefix}ACT_CMMN_HI_CASE_INST CASEINST)
   </delete>
 
   <!-- HISTORIC TASK INSTANCE RESULT MAP -->
@@ -438,7 +435,7 @@
 
   <select id="selectHistoricTaskInstancesByQueryCriteria" parameterType="org.flowable.task.service.impl.HistoricTaskInstanceQueryImpl" resultMap="historicTaskInstanceResultMap">
   	<if test="firstResult != null and firstResult &gt;= 0">${limitBefore}</if>
-    select distinct RES.* <if test="nullHandlingColumn != null">, ${nullHandlingColumn}</if> <if test="firstResult != null and firstResult &gt;= 0">${limitBetween}</if>
+    select distinct RES.* <if test="firstResult != null and firstResult &gt;= 0">${limitBetween}</if> <if test="nullHandlingColumn != null">, ${nullHandlingColumn}</if>
     <include refid="selectHistoricTaskInstancesByQueryCriteriaSql"/>
     ${orderBy}
     <if test="firstResult != null and firstResult &gt;= 0">${limitAfter}</if>
@@ -571,14 +568,11 @@
     <if test="processFinished || processUnfinished || processInstanceBusinessKey != null || processInstanceBusinessKeyLike != null || processInstanceBusinessKeyLikeIgnoreCase != null">
       inner join ${prefix}ACT_HI_PROCINST HPI ON RES.PROC_INST_ID_ = HPI.ID_
     </if>
-    <if test="processDefinitionKey != null || processDefinitionKeyLike != null || processDefinitionKeyLikeIgnoreCase != null || processDefinitionName != null || processDefinitionNameLike != null || (processCategoryInList != null &amp;&amp; processCategoryInList.size() &gt; 0) || (processCategoryNotInList != null &amp;&amp; processCategoryNotInList.size() &gt; 0) || (processDefinitionKeys != null &amp;&amp; processDefinitionKeys.size() &gt; 0)">
+    <if test="processDefinitionKey != null || processDefinitionKeyLike != null || processDefinitionKeyLikeIgnoreCase != null || processDefinitionName != null || processDefinitionNameLike != null || (processCategoryInList != null &amp;&amp; processCategoryInList.size() &gt; 0) || (processCategoryNotInList != null &amp;&amp; processCategoryNotInList.size() &gt; 0) || (processDefinitionKeys != null &amp;&amp; processDefinitionKeys.size() &gt; 0) || deploymentId != null || (deploymentIds != null &amp;&amp; deploymentIds.size() &gt; 0)">
       inner join ${prefix}ACT_RE_PROCDEF D on RES.PROC_DEF_ID_ = D.ID_
     </if>
-    <if test="deploymentId != null || (deploymentIds != null &amp;&amp; deploymentIds.size() &gt; 0)">
-      left outer join ${prefix}ACT_RE_PROCDEF DEPLOY_P ON RES.PROC_DEF_ID_ = DEPLOY_P.ID_
-    </if>
-    <if test="cmmnDeploymentId != null || (cmmnDeploymentIds != null &amp;&amp; cmmnDeploymentIds.size() &gt; 0)">
-      left outer join ${prefix}ACT_CMMN_CASEDEF DEPLOY_C ON RES.SCOPE_DEFINITION_ID_ = DEPLOY_C.ID_
+    <if test="caseDefinitionKey != null || caseDefinitionKeyLike != null ||  caseDefinitionKeyLikeIgnoreCase != null || (caseDefinitionKeys != null &amp;&amp; caseDefinitionKeys.size() &gt; 0) || cmmnDeploymentId != null || (cmmnDeploymentIds != null &amp;&amp; cmmnDeploymentIds.size() &gt; 0)">
+      inner join ${prefix}ACT_CMMN_CASEDEF CD on RES.SCOPE_DEFINITION_ID_ = CD.ID_
     </if>
     <foreach collection="queryVariableValues" index="index" item="var">
       <if test="!var.operator.equals('EXISTS') &amp;&amp; !var.operator.equals('NOT_EXISTS')">
@@ -596,14 +590,11 @@
       <if test="orQueryObject.processFinished || orQueryObject.processUnfinished || orQueryObject.processInstanceBusinessKey != null || orQueryObject.processInstanceBusinessKeyLike != null || orQueryObject.processInstanceBusinessKeyLikeIgnoreCase != null">
         inner join ${prefix}ACT_HI_PROCINST HPI_OR${orIndex} ON RES.PROC_INST_ID_ = HPI_OR${orIndex}.ID_
       </if>
-      <if test="orQueryObject.processDefinitionKey != null || orQueryObject.processDefinitionKeyLike != null || orQueryObject.processDefinitionKeyLikeIgnoreCase != null || orQueryObject.processDefinitionName != null || orQueryObject.processDefinitionNameLike != null || (orQueryObject.processCategoryInList != null &amp;&amp; orQueryObject.processCategoryInList.size() &gt; 0) || (orQueryObject.processCategoryNotInList != null &amp;&amp; orQueryObject.processCategoryNotInList.size() &gt; 0) || (orQueryObject.processDefinitionKeys != null &amp;&amp; orQueryObject.processDefinitionKeys.size() &gt; 0)">
+      <if test="orQueryObject.processDefinitionKey != null || orQueryObject.processDefinitionKeyLike != null || orQueryObject.processDefinitionKeyLikeIgnoreCase != null || orQueryObject.processDefinitionName != null || orQueryObject.processDefinitionNameLike != null || (orQueryObject.processCategoryInList != null &amp;&amp; orQueryObject.processCategoryInList.size() &gt; 0) || (orQueryObject.processCategoryNotInList != null &amp;&amp; orQueryObject.processCategoryNotInList.size() &gt; 0) || (orQueryObject.processDefinitionKeys != null &amp;&amp; orQueryObject.processDefinitionKeys.size() &gt; 0) || orQueryObject.deploymentId != null || (orQueryObject.deploymentIds != null &amp;&amp; orQueryObject.deploymentIds.size() &gt; 0)">
         left outer join ${prefix}ACT_RE_PROCDEF D_OR${orIndex} on RES.PROC_DEF_ID_ = D_OR${orIndex}.ID_
       </if>
-      <if test="orQueryObject.deploymentId != null || (orQueryObject.deploymentIds != null &amp;&amp; orQueryObject.deploymentIds.size() &gt; 0)">
-        left outer join ${prefix}ACT_RE_PROCDEF DEPLOY_P_OR${orIndex} ON RES.PROC_DEF_ID_ = DEPLOY_P_OR${orIndex}.ID_
-      </if>
-      <if test="orQueryObject.cmmnDeploymentId != null || (orQueryObject.cmmnDeploymentIds != null &amp;&amp; orQueryObject.cmmnDeploymentIds.size() &gt; 0)">
-        left outer join ${prefix}ACT_CMMN_CASEDEF DEPLOY_C_OR${orIndex} ON RES.SCOPE_DEFINITION_ID_ = DEPLOY_C_OR${orIndex}.ID_
+      <if test="orQueryObject.caseDefinitionKey != null || orQueryObject.caseDefinitionKeyLike != null || orQueryObject.caseDefinitionKeyLikeIgnoreCase != null || (orQueryObject.caseDefinitionKeys != null &amp;&amp; orQueryObject.caseDefinitionKeys.size() &gt; 0) || orQueryObject.cmmnDeploymentId != null || (orQueryObject.cmmnDeploymentIds != null &amp;&amp; orQueryObject.cmmnDeploymentIds.size() &gt; 0)">
+        left outer join ${prefix}ACT_CMMN_CASEDEF CD_OR${orIndex} on RES.SCOPE_DEFINITION_ID_ = CD_OR${orIndex}.ID_
       </if>
       <if test="orQueryObject.queryVariableValues.size() &gt; 0">
         <if test="orQueryObject.hasValueComparisonQueryVariables()">
@@ -655,41 +646,40 @@
           #{processCategory}
         </foreach>
       </if>
-      <if test="deploymentId != null &amp;&amp; cmmnDeploymentId == null">
-        and DEPLOY_P.DEPLOYMENT_ID_ = #{deploymentId}
+      <if test="deploymentId != null">
+        and D.DEPLOYMENT_ID_ = #{deploymentId}
       </if>
-      <if test="deploymentIds != null &amp;&amp; deploymentIds.size() &gt; 0 &amp;&amp; cmmnDeploymentIds == null">
-        and DEPLOY_P.DEPLOYMENT_ID_ IN
+      <if test="deploymentIds != null &amp;&amp; deploymentIds.size() &gt; 0">
+        and D.DEPLOYMENT_ID_ IN
         <foreach item="deployment" index="index" collection="deploymentIds"
                  open="(" separator="," close=")">
           #{deployment}
         </foreach>
       </if>
-      <if test="cmmnDeploymentId != null &amp;&amp; deploymentId == null">
-        and DEPLOY_C.DEPLOYMENT_ID_ = #{cmmnDeploymentId}
+      <if test="cmmnDeploymentId != null">
+        and CD.DEPLOYMENT_ID_ = #{cmmnDeploymentId}
       </if>
-      <if test="cmmnDeploymentIds != null &amp;&amp; cmmnDeploymentIds.size() &gt; 0 &amp;&amp; deploymentIds == null">
-        and DEPLOY_C.DEPLOYMENT_ID_ IN
+      <if test="cmmnDeploymentIds != null &amp;&amp; cmmnDeploymentIds.size() &gt; 0">
+        and CD.DEPLOYMENT_ID_ IN
         <foreach item="deployment" index="index" collection="cmmnDeploymentIds"
                  open="(" separator="," close=")">
           #{deployment}
         </foreach>
       </if>
-      <if test="deploymentId != null &amp;&amp; cmmnDeploymentId != null">
-        and (DEPLOY_P.DEPLOYMENT_ID_ = #{deploymentId} or DEPLOY_C.DEPLOYMENT_ID = #{cmmnDeploymentId})
+      <if test="caseDefinitionKey != null">
+        and CD.KEY_ = #{caseDefinitionKey}
       </if>
-      <if test="cmmnDeploymentIds != null &amp;&amp; cmmnDeploymentIds.size() &gt; 0 &amp;&amp; deploymentIds != null &amp;&amp; deploymentIds.size() &gt; 0">
-        and (
-            DEPLOY_P.DEPLOYMENT_ID_ IN
-            <foreach item="deployment" index="index" collection="deploymentIds" open="(" separator="," close=")">
-                #{deployment}
-            </foreach>
-            or
-            DEPLOY_C.DEPLOYMENT_ID_ IN
-            <foreach item="cmmnDeployment" index="index" collection="cmmnDeploymentIds" open="(" separator="," close=")">
-                #{cmmnDeployment}
-            </foreach>
-        )
+      <if test="caseDefinitionKeyLike != null">
+        and CD.KEY_ like #{caseDefinitionKeyLike}${wildcardEscapeClause}
+      </if>
+      <if test="caseDefinitionKeyLikeIgnoreCase != null">
+        and lower(CD.KEY_) like #{caseDefinitionKeyLikeIgnoreCase}${wildcardEscapeClause}
+      </if>
+      <if test="caseDefinitionKeys != null &amp;&amp; caseDefinitionKeys.size() &gt; 0">
+        and CD.KEY_ in
+        <foreach item="item" index="index" collection="caseDefinitionKeys" open="(" separator="," close=")">
+          #{item}
+        </foreach>
       </if>
       <if test="processFinished">
         and HPI.END_TIME_ is not null
@@ -739,17 +729,17 @@
                   <!-- Match-all variable-names when name is null -->
                   and A${index}.NAME_= #{queryVar.name}
                 </if>
-                <if test="!queryVar.type.equals('null')">
+                <if test="queryVar.needsTypeCheck()">
                   and A${index}.VAR_TYPE_ = #{queryVar.type}
                 </if>
                 <!-- Variable value -->
                 <if test="queryVar.textValue != null &amp;&amp; queryVar.longValue == null &amp;&amp; queryVar.doubleValue == null">
                   <choose>
                     <when test="queryVar.operator.equals('EQUALS_IGNORE_CASE') || queryVar.operator.equals('NOT_EQUALS_IGNORE_CASE') || queryVar.operator.equals('LIKE_IGNORE_CASE')">
-                      and lower(A${index}.TEXT_)
+                      and (lower(A${index}.TEXT_)
                     </when>
                     <otherwise>
-                      and A${index}.TEXT_
+                      and (A${index}.TEXT_
                     </otherwise>
                   </choose>
                   <choose>
@@ -760,6 +750,10 @@
                   <choose>
         			<when test="queryVar.operator.equals('LIKE') || queryVar.operator.equals('LIKE_IGNORE_CASE')">${wildcardEscapeClause}</when>
         		  </choose>
+                  <if test="queryVar.operator.equals('NOT_EQUALS') || queryVar.operator.equals('NOT_EQUALS_IGNORE_CASE')">
+                    or A${index}.TEXT_ is null
+                  </if>
+                  )
                 </if>
                 <if test="queryVar.textValue2 != null">
                   and A${index}.TEXT2_
@@ -773,14 +767,22 @@
         		  </choose>
                 </if>
                 <if test="queryVar.longValue != null">
-                  and A${index}.LONG_
+                  and (A${index}.LONG_
                   <include refid="executionVariableOperator" />
                   #{queryVar.longValue}
+                  <if test="queryVar.operator.equals('NOT_EQUALS') || queryVar.operator.equals('NOT_EQUALS_IGNORE_CASE')">
+                    or A${index}.LONG_ is null
+                  </if>
+                  )
                 </if>
                 <if test="queryVar.doubleValue != null">
-                  and A${index}.DOUBLE_
+                  and (A${index}.DOUBLE_
                   <include refid="executionVariableOperator" />
                   #{queryVar.doubleValue}
+                  <if test="queryVar.operator.equals('NOT_EQUALS') || queryVar.operator.equals('NOT_EQUALS_IGNORE_CASE')">
+                    or A${index}.DOUBLE_ is null
+                  </if>
+                  )
                 </if>
                 <!-- Null variable type -->
                 <if test="queryVar.textValue == null &amp;&amp; queryVar.textValue2 == null &amp;&amp; queryVar.longValue == null &amp;&amp; queryVar.doubleValue == null">
@@ -838,23 +840,38 @@
             </foreach>
           </if>
           <if test="orQueryObject.deploymentId != null">
-            or DEPLOY_P_OR${orIndex}.DEPLOYMENT_ID_ = #{orQueryObject.deploymentId}
+            or D_OR${orIndex}.DEPLOYMENT_ID_ = #{orQueryObject.deploymentId}
           </if>
           <if test="orQueryObject.deploymentIds != null &amp;&amp; orQueryObject.deploymentIds.size() &gt; 0">
-            or DEPLOY_P_OR${orIndex}.DEPLOYMENT_ID_ IN
+            or D_OR${orIndex}.DEPLOYMENT_ID_ IN
             <foreach item="deployment" index="index" collection="orQueryObject.deploymentIds"
                      open="(" separator="," close=")">
               #{deployment}
             </foreach>
           </if>
           <if test="orQueryObject.cmmnDeploymentId != null">
-            or DEPLOY_C_OR${orIndex}.DEPLOYMENT_ID_ = #{orQueryObject.cmmnDeploymentId}
+            or CD_OR${orIndex}.DEPLOYMENT_ID_ = #{orQueryObject.cmmnDeploymentId}
           </if>
           <if test="orQueryObject.cmmnDeploymentIds != null &amp;&amp; orQueryObject.cmmnDeploymentIds.size() &gt; 0">
-            or DEPLOY_C_OR${orIndex}.DEPLOYMENT_ID_ IN
+            or CD_OR${orIndex}.DEPLOYMENT_ID_ IN
             <foreach item="deployment" index="index" collection="orQueryObject.cmmnDeploymentIds"
                      open="(" separator="," close=")">
               #{deployment}
+            </foreach>
+          </if>
+          <if test="orQueryObject.caseDefinitionKey != null">
+            or CD_OR${orIndex}.KEY_ = #{orQueryObject.caseDefinitionKey}
+          </if>
+          <if test="orQueryObject.caseDefinitionKeyLike != null">
+            or CD_OR${orIndex}.KEY_ like #{orQueryObject.caseDefinitionKeyLike}${wildcardEscapeClause}
+          </if>
+          <if test="orQueryObject.caseDefinitionKeyLikeIgnoreCase != null">
+            or lower(CD_OR${orIndex}.KEY_) like #{orQueryObject.caseDefinitionKeyLikeIgnoreCase}${wildcardEscapeClause}
+          </if>
+          <if test="orQueryObject.caseDefinitionKeys != null &amp;&amp; orQueryObject.caseDefinitionKeys.size() &gt; 0">
+            or CD_OR${orIndex}.KEY_ in
+            <foreach item="item" index="index" collection="orQueryObject.caseDefinitionKeys" open="(" separator="," close=")">
+              #{item}
             </foreach>
           </if>
           <if test="orQueryObject.processInstanceBusinessKey != null">
@@ -913,17 +930,17 @@
                     <!-- Match-all variable-names when name is null -->
                     and A_${orLocal}OR${orIndex}.NAME_= #{queryVar.name}
                   </if>
-                  <if test="!queryVar.type.equals('null')">
+                  <if test="queryVar.needsTypeCheck()">
                     and A_${orLocal}OR${orIndex}.VAR_TYPE_ = #{queryVar.type}
                   </if>
                   <!-- Variable value -->
                   <if test="queryVar.textValue != null &amp;&amp; queryVar.longValue == null &amp;&amp; queryVar.doubleValue == null">
                     <choose>
                       <when test="queryVar.operator.equals('EQUALS_IGNORE_CASE') || queryVar.operator.equals('NOT_EQUALS_IGNORE_CASE') || queryVar.operator.equals('LIKE_IGNORE_CASE')">
-                        and lower(A_${orLocal}OR${orIndex}.TEXT_)
+                        and (lower(A_${orLocal}OR${orIndex}.TEXT_)
                       </when>
                       <otherwise>
-                        and A_${orLocal}OR${orIndex}.TEXT_
+                        and (A_${orLocal}OR${orIndex}.TEXT_
                       </otherwise>
                     </choose>
                     <choose>
@@ -934,6 +951,10 @@
                     <choose>
                       <when test="queryVar.operator.equals('LIKE') || queryVar.operator.equals('LIKE_IGNORE_CASE')">${wildcardEscapeClause}</when>
                     </choose>
+                    <if test="queryVar.operator.equals('NOT_EQUALS') || queryVar.operator.equals('NOT_EQUALS_IGNORE_CASE')">
+                      or A_${orLocal}OR${orIndex}.TEXT_ is null
+                    </if>
+                    )
                   </if>
                   <if test="queryVar.textValue2 != null">
                     and A_${orLocal}OR${orIndex}.TEXT2_
@@ -947,14 +968,22 @@
                     </choose>
                   </if>
                   <if test="queryVar.longValue != null">
-                    and A_${orLocal}OR${orIndex}.LONG_
+                    and (A_${orLocal}OR${orIndex}.LONG_
                     <include refid="executionVariableOperator" />
                     #{queryVar.longValue}
+                    <if test="queryVar.operator.equals('NOT_EQUALS') || queryVar.operator.equals('NOT_EQUALS_IGNORE_CASE')">
+                      or A_${orLocal}OR${orIndex}.LONG_ is null
+                    </if>
+                    )
                   </if>
                   <if test="queryVar.doubleValue != null">
-                    and A_OR${orIndex}_${index}.DOUBLE_
+                    and (A_OR${orIndex}_${index}.DOUBLE_
                     <include refid="executionVariableOperator" />
                     #{queryVar.doubleValue}
+                    <if test="queryVar.operator.equals('NOT_EQUALS') || queryVar.operator.equals('NOT_EQUALS_IGNORE_CASE')">
+                      or A_${orLocal}OR${orIndex}.DOUBLE_ is null
+                    </if>
+                    )
                   </if>
                   <!-- Null variable type -->
                   <if test="queryVar.textValue == null &amp;&amp; queryVar.textValue2 == null &amp;&amp; queryVar.longValue == null &amp;&amp; queryVar.doubleValue == null">
@@ -1101,6 +1130,12 @@
                  open="(" separator="," close=")">
           #{assigneeId}
         </foreach>
+      </if>
+      <if test="withAssignee">
+        and ${queryTablePrefix}ASSIGNEE_ IS NOT NULL
+      </if>
+      <if test="withoutAssignee">
+        and ${queryTablePrefix}ASSIGNEE_ IS NULL
       </if>
       <if test="taskPriority != null">
         and ${queryTablePrefix}PRIORITY_ = #{taskPriority}
@@ -1326,6 +1361,12 @@
       </if>
        <if test="orQueryObject.taskAssigneeLikeIgnoreCase != null">
         or ${queryTablePrefix}ASSIGNEE_ like #{orQueryObject.taskAssigneeLikeIgnoreCase}${wildcardEscapeClause}
+      </if>
+      <if test="orQueryObject.withAssignee">
+        or ${queryTablePrefix}ASSIGNEE_ IS NOT NULL
+      </if>
+      <if test="orQueryObject.withoutAssignee">
+        or ${queryTablePrefix}ASSIGNEE_ IS NULL
       </if>
       <if test="orQueryObject.taskAssigneeIds != null &amp;&amp; orQueryObject.taskAssigneeIds.size() &gt; 0">
         or ${queryTablePrefix}ASSIGNEE_ IN

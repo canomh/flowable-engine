@@ -25,9 +25,15 @@ public interface CaseInstance {
     String getBusinessKey();
     String getName();
     String getCaseDefinitionId();
+    String getCaseDefinitionKey();
+    String getCaseDefinitionName();
+    Integer getCaseDefinitionVersion();
+    String getCaseDefinitionDeploymentId();
     String getState();
     Date getStartTime();
     String getStartUserId();
+    Date getLastReactivationTime();
+    String getLastReactivationUserId();
     String getCallbackId();
     String getCallbackType();
     String getReferenceId();

@@ -12,8 +12,6 @@
  */
 package org.flowable.cmmn.engine.impl.agenda;
 
-import java.util.Map;
-
 import org.flowable.cmmn.engine.impl.agenda.operation.ActivateAsyncPlanItemInstanceOperation;
 import org.flowable.cmmn.engine.impl.agenda.operation.ActivatePlanItemInstanceOperation;
 import org.flowable.cmmn.engine.impl.agenda.operation.ChangePlanItemInstanceToAvailableOperation;
@@ -32,13 +30,17 @@ import org.flowable.cmmn.engine.impl.agenda.operation.InitPlanModelInstanceOpera
 import org.flowable.cmmn.engine.impl.agenda.operation.InitStageInstanceOperation;
 import org.flowable.cmmn.engine.impl.agenda.operation.InitiatePlanItemInstanceOperation;
 import org.flowable.cmmn.engine.impl.agenda.operation.OccurPlanItemInstanceOperation;
+import org.flowable.cmmn.engine.impl.agenda.operation.ReactivateCaseInstanceOperation;
+import org.flowable.cmmn.engine.impl.agenda.operation.ReactivatePlanItemInstanceOperation;
 import org.flowable.cmmn.engine.impl.agenda.operation.StartPlanItemInstanceOperation;
 import org.flowable.cmmn.engine.impl.agenda.operation.TerminateCaseInstanceOperation;
 import org.flowable.cmmn.engine.impl.agenda.operation.TerminatePlanItemInstanceOperation;
 import org.flowable.cmmn.engine.impl.agenda.operation.TriggerPlanItemInstanceOperation;
+import org.flowable.cmmn.engine.impl.behavior.impl.ChildTaskActivityBehavior;
 import org.flowable.cmmn.engine.impl.criteria.PlanItemLifeCycleEvent;
 import org.flowable.cmmn.engine.impl.persistence.entity.CaseInstanceEntity;
 import org.flowable.cmmn.engine.impl.persistence.entity.PlanItemInstanceEntity;
+import org.flowable.cmmn.engine.interceptor.MigrationContext;
 import org.flowable.common.engine.impl.agenda.AbstractAgenda;
 import org.flowable.common.engine.impl.interceptor.CommandContext;
 import org.slf4j.Logger;
@@ -97,6 +99,11 @@ public class DefaultCmmnEngineAgenda extends AbstractAgenda implements CmmnEngin
     }
 
     @Override
+    public void planReactivateCaseInstanceOperation(CaseInstanceEntity caseInstanceEntity) {
+        addOperation(new ReactivateCaseInstanceOperation(commandContext, caseInstanceEntity));
+    }
+
+    @Override
     public void planInitStageOperation(PlanItemInstanceEntity planItemInstanceEntity) {
         addOperation(new InitStageInstanceOperation(commandContext, planItemInstanceEntity));
     }
@@ -125,6 +132,11 @@ public class DefaultCmmnEngineAgenda extends AbstractAgenda implements CmmnEngin
     @Override
     public void planCreatePlanItemInstanceOperation(PlanItemInstanceEntity planItemInstanceEntity) {
         addOperation(new CreatePlanItemInstanceOperation(commandContext, planItemInstanceEntity));
+    }
+
+    @Override
+    public void planReactivatePlanItemInstanceOperation(PlanItemInstanceEntity planItemInstanceEntity) {
+        addOperation(new ReactivatePlanItemInstanceOperation(commandContext, planItemInstanceEntity));
     }
 
     @Override
@@ -158,10 +170,16 @@ public class DefaultCmmnEngineAgenda extends AbstractAgenda implements CmmnEngin
     }
     
     @Override
-    public void planStartPlanItemInstanceOperation(PlanItemInstanceEntity planItemInstanceEntity, String entryCriterionId, Map<String, Object> variables) {
-        addOperation(new StartPlanItemInstanceOperation(commandContext, planItemInstanceEntity, entryCriterionId, variables));
+    public void planStartPlanItemInstanceOperation(PlanItemInstanceEntity planItemInstanceEntity, String entryCriterionId,
+            ChildTaskActivityBehavior.VariableInfo childTaskVariableInfo) {
+        addOperation(new StartPlanItemInstanceOperation(commandContext, planItemInstanceEntity, entryCriterionId, childTaskVariableInfo));
     }
     
+    @Override
+    public void planStartPlanItemInstanceOperation(PlanItemInstanceEntity planItemInstanceEntity, String entryCriterionId, MigrationContext migrationContext) {
+        addOperation(new StartPlanItemInstanceOperation(commandContext, planItemInstanceEntity, entryCriterionId, migrationContext));
+    }
+
     @Override
     public void planEnablePlanItemInstanceOperation(PlanItemInstanceEntity planItemInstanceEntity, String entryCriterionId) {
         addOperation(new EnablePlanItemInstanceOperation(commandContext, planItemInstanceEntity, entryCriterionId));

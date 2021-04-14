@@ -13,6 +13,7 @@
 package org.flowable.cmmn.test.task;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.Serializable;
 import java.util.List;
@@ -22,11 +23,16 @@ import org.flowable.cmmn.api.runtime.CaseInstance;
 import org.flowable.cmmn.api.runtime.PlanItemInstance;
 import org.flowable.cmmn.engine.test.CmmnDeployment;
 import org.flowable.cmmn.engine.test.FlowableCmmnTestCase;
+import org.flowable.cmmn.engine.test.impl.CmmnHistoryTestHelper;
+import org.flowable.common.engine.api.FlowableException;
+import org.flowable.common.engine.api.FlowableIllegalArgumentException;
+import org.flowable.common.engine.impl.history.HistoryLevel;
 import org.flowable.variable.api.history.HistoricVariableInstance;
 import org.junit.Test;
 
 /**
  * @author Dennis Federico
+ * @author Filip Hrisafov
  */
 public class CmmnScriptTaskTest extends FlowableCmmnTestCase {
 
@@ -50,7 +56,6 @@ public class CmmnScriptTaskTest extends FlowableCmmnTestCase {
         assertCaseInstanceEnded(caseInstance);
 
         Map<String, Object> variables = cmmnRuntimeService.getVariables(caseInstance.getId());
-        assertThat(variables).isNotNull();
         assertThat(variables).isEmpty();
     }
 
@@ -86,50 +91,53 @@ public class CmmnScriptTaskTest extends FlowableCmmnTestCase {
 
         //Check the case variables, one will be created by the script execution
         Map<String, Object> caseVariables = cmmnRuntimeService.getVariables(caseInstance.getId());
-        assertThat(caseVariables).isNotNull();
         assertThat(caseVariables).hasSize(1);
         assertThat(cmmnRuntimeService.hasVariable(caseInstance.getId(), "aInt")).isTrue();
         Object integer = cmmnRuntimeService.getVariable(caseInstance.getId(), "aInt");
-        assertThat(integer).isInstanceOf(Integer.class);
-        assertThat(integer).isEqualTo(5);
+        assertThat(integer)
+                .isInstanceOf(Integer.class)
+                .isEqualTo(5);
 
         //The planItemInstance scope variable is available on the history service
-        List<HistoricVariableInstance> historicVariables = cmmnHistoryService.createHistoricVariableInstanceQuery()
-                .caseInstanceId(caseInstance.getId())
-                .planItemInstanceId(scriptTaskPlanInstanceId)
-                .list();
-        assertThat(historicVariables).hasSize(1);
+        if (CmmnHistoryTestHelper.isHistoryLevelAtLeast(HistoryLevel.ACTIVITY, cmmnEngineConfiguration)) {
+            List<HistoricVariableInstance> historicVariables = cmmnHistoryService.createHistoricVariableInstanceQuery()
+                    .caseInstanceId(caseInstance.getId())
+                    .planItemInstanceId(scriptTaskPlanInstanceId)
+                    .list();
+            assertThat(historicVariables).hasSize(1);
 
-        HistoricVariableInstance planItemInstanceVariable = historicVariables.get(0);
-        assertThat(planItemInstanceVariable).isNotNull();
-        assertThat(planItemInstanceVariable.getVariableName()).isEqualTo("aString");
-        assertThat(planItemInstanceVariable.getVariableTypeName()).isEqualTo("string");
-        assertThat(planItemInstanceVariable.getValue()).isEqualTo("value set in the script");
-        assertThat(planItemInstanceVariable.getSubScopeId()).isEqualTo(scriptTaskPlanInstanceId);
+            HistoricVariableInstance planItemInstanceVariable = historicVariables.get(0);
+            assertThat(planItemInstanceVariable).isNotNull();
+            assertThat(planItemInstanceVariable.getVariableName()).isEqualTo("aString");
+            assertThat(planItemInstanceVariable.getVariableTypeName()).isEqualTo("string");
+            assertThat(planItemInstanceVariable.getValue()).isEqualTo("value set in the script");
+            assertThat(planItemInstanceVariable.getSubScopeId()).isEqualTo(scriptTaskPlanInstanceId);
+        }
 
         endTestCase();
         assertCaseInstanceEnded(caseInstance);
 
         //Both variables are still in the history
-        historicVariables = cmmnHistoryService.createHistoricVariableInstanceQuery()
-                .caseInstanceId(caseInstance.getId())
-                .list();
-        assertThat(historicVariables).hasSize(2);
+        if (CmmnHistoryTestHelper.isHistoryLevelAtLeast(HistoryLevel.ACTIVITY, cmmnEngineConfiguration)) {
+            List<HistoricVariableInstance> historicVariables = cmmnHistoryService.createHistoricVariableInstanceQuery()
+                    .caseInstanceId(caseInstance.getId())
+                    .list();
+            assertThat(historicVariables).hasSize(2);
 
-        HistoricVariableInstance caseScopeVariable = historicVariables.stream().filter(v -> v.getSubScopeId() == null).findFirst().get();
-        assertThat(caseScopeVariable)
-                .extracting(HistoricVariableInstance::getVariableName,
-                        HistoricVariableInstance::getVariableTypeName,
-                        HistoricVariableInstance::getValue)
-                .containsExactly("aInt", "integer", 5);
-        ;
+            HistoricVariableInstance caseScopeVariable = historicVariables.stream().filter(v -> v.getSubScopeId() == null).findFirst().get();
+            assertThat(caseScopeVariable)
+                    .extracting(HistoricVariableInstance::getVariableName,
+                            HistoricVariableInstance::getVariableTypeName,
+                            HistoricVariableInstance::getValue)
+                    .containsExactly("aInt", "integer", 5);
 
-        HistoricVariableInstance planItemScopeVariable = historicVariables.stream().filter(v -> v.getSubScopeId() != null).findFirst().get();
-        assertThat(planItemScopeVariable)
-                .extracting(HistoricVariableInstance::getVariableName,
-                        HistoricVariableInstance::getVariableTypeName,
-                        HistoricVariableInstance::getValue)
-                .containsExactly("aString", "string", "value set in the script");
+            HistoricVariableInstance planItemScopeVariable = historicVariables.stream().filter(v -> v.getSubScopeId() != null).findFirst().get();
+            assertThat(planItemScopeVariable)
+                    .extracting(HistoricVariableInstance::getVariableName,
+                            HistoricVariableInstance::getVariableTypeName,
+                            HistoricVariableInstance::getValue)
+                    .containsExactly("aString", "string", "value set in the script");
+        }
     }
 
     @Test
@@ -225,7 +233,6 @@ public class CmmnScriptTaskTest extends FlowableCmmnTestCase {
         assertThat(caseInstance).isNotNull();
 
         Map<String, Object> variables = cmmnRuntimeService.getVariables(caseInstance.getId());
-        assertThat(variables).isNotNull();
         assertThat(variables).hasSize(2);
 
         assertThat(cmmnRuntimeService.hasVariable(caseInstance.getId(), "sum")).isTrue();
@@ -248,7 +255,6 @@ public class CmmnScriptTaskTest extends FlowableCmmnTestCase {
         assertThat(caseInstance).isNotNull();
 
         Map<String, Object> variables = cmmnRuntimeService.getVariables(caseInstance.getId());
-        assertThat(variables).isNotNull();
         assertThat(variables).hasSize(1);
 
         assertThat(cmmnRuntimeService.hasVariable(caseInstance.getId(), "sum")).isFalse();
@@ -257,6 +263,57 @@ public class CmmnScriptTaskTest extends FlowableCmmnTestCase {
         endTestCase();
         assertCaseInstanceEnded(caseInstance);
     }
+
+    @Test
+    @CmmnDeployment
+    public void testScriptThrowsFlowableException() {
+        CaseInstance caseInstance = cmmnRuntimeService.createCaseInstanceBuilder()
+                .caseDefinitionKey("scriptCase")
+                .start();
+        assertThat(caseInstance).isNotNull();
+
+        PlanItemInstance planItemInstance = cmmnRuntimeService.createPlanItemInstanceQuery().planItemInstanceElementId("planItemTaskA").singleResult();
+        assertThat(planItemInstance)
+                .extracting(PlanItemInstance::getName, PlanItemInstance::getPlanItemDefinitionId)
+                .containsExactly("Plan Item One", "taskA");
+        assertCaseInstanceNotEnded(caseInstance);
+
+        PlanItemInstance blockerPlanItemInstance = cmmnRuntimeService.createPlanItemInstanceQuery().planItemInstanceElementId("blockerPlanItem").singleResult();
+        assertThat(blockerPlanItemInstance).isNotNull();
+        assertThatThrownBy(() -> cmmnRuntimeService.triggerPlanItemInstance(blockerPlanItemInstance.getId()))
+                .isExactlyInstanceOf(FlowableIllegalArgumentException.class)
+                .hasNoCause()
+                .hasMessage("Illegal argument in script");
+
+        assertCaseInstanceNotEnded(caseInstance);
+    }
+
+    @Test
+    @CmmnDeployment
+    public void testScriptThrowsNonFlowableException() {
+        CaseInstance caseInstance = cmmnRuntimeService.createCaseInstanceBuilder()
+                .caseDefinitionKey("scriptCase")
+                .start();
+        assertThat(caseInstance).isNotNull();
+
+        PlanItemInstance planItemInstance = cmmnRuntimeService.createPlanItemInstanceQuery().planItemInstanceElementId("planItemTaskA").singleResult();
+        assertThat(planItemInstance)
+                .extracting(PlanItemInstance::getName, PlanItemInstance::getPlanItemDefinitionId)
+                .containsExactly("Plan Item One", "taskA");
+        assertCaseInstanceNotEnded(caseInstance);
+
+        PlanItemInstance blockerPlanItemInstance = cmmnRuntimeService.createPlanItemInstanceQuery().planItemInstanceElementId("blockerPlanItem").singleResult();
+        assertThat(blockerPlanItemInstance).isNotNull();
+        assertThatThrownBy(() -> cmmnRuntimeService.triggerPlanItemInstance(blockerPlanItemInstance.getId()))
+            .isExactlyInstanceOf(FlowableException.class)
+            .hasMessage("problem evaluating script: java.lang.RuntimeException: Illegal argument in script in <eval> at line number 2 at column number 28")
+            .getRootCause()
+            .isExactlyInstanceOf(RuntimeException.class)
+            .hasMessage("Illegal argument in script");
+
+        assertCaseInstanceNotEnded(caseInstance);
+    }
+
 
     private void endTestCase() {
         PlanItemInstance planItemInstance = cmmnRuntimeService.createPlanItemInstanceQuery().planItemInstanceElementId("blockerPlanItem").singleResult();

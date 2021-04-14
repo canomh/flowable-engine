@@ -33,11 +33,11 @@ public class HistoricVariableInstanceEntityManagerImpl
     implements HistoricVariableInstanceEntityManager {
 
     public HistoricVariableInstanceEntityManagerImpl(VariableServiceConfiguration variableServiceConfiguration, HistoricVariableInstanceDataManager historicVariableInstanceDataManager) {
-        super(variableServiceConfiguration, historicVariableInstanceDataManager);
+        super(variableServiceConfiguration, variableServiceConfiguration.getEngineName(), historicVariableInstanceDataManager);
     }
 
     @Override
-    public HistoricVariableInstanceEntity createAndInsert(VariableInstanceEntity variableInstance, Date createTime) {
+    public HistoricVariableInstanceEntity create(VariableInstanceEntity variableInstance, Date createTime) {
         HistoricVariableInstanceEntity historicVariableInstance = dataManager.create();
         historicVariableInstance.setId(variableInstance.getId());
         historicVariableInstance.setProcessInstanceId(variableInstance.getProcessInstanceId());
@@ -54,6 +54,13 @@ public class HistoricVariableInstanceEntityManagerImpl
 
         historicVariableInstance.setCreateTime(createTime);
         historicVariableInstance.setLastUpdatedTime(createTime);
+
+        return historicVariableInstance;
+    }
+
+    @Override
+    public HistoricVariableInstanceEntity createAndInsert(VariableInstanceEntity variableInstance, Date createTime) {
+        HistoricVariableInstanceEntity historicVariableInstance = create(variableInstance, createTime);
 
         insert(historicVariableInstance);
 
@@ -80,7 +87,7 @@ public class HistoricVariableInstanceEntityManagerImpl
         super.delete(entity, fireDeleteEvent);
 
         if (entity.getByteArrayRef() != null) {
-            entity.getByteArrayRef().delete();
+            entity.getByteArrayRef().delete(serviceConfiguration.getEngineName());
         }
     }
 

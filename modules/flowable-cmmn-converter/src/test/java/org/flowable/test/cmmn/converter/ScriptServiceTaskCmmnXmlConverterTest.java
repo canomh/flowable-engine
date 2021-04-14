@@ -25,28 +25,14 @@ import org.flowable.cmmn.model.PlanItemDefinition;
 import org.flowable.cmmn.model.ScriptServiceTask;
 import org.flowable.cmmn.model.Stage;
 import org.flowable.cmmn.model.Task;
-import org.junit.Test;
+import org.flowable.test.cmmn.converter.util.CmmnXmlConverterTest;
 
 /**
  * @author Tijs Rademakers
  */
-public class ScriptServiceTaskCmmnXmlConverterTest extends AbstractConverterTest {
+public class ScriptServiceTaskCmmnXmlConverterTest {
 
-    private static final String CMMN_RESOURCE = "org/flowable/test/cmmn/converter/script-task.cmmn";
-
-    @Test
-    public void convertXMLToModel() throws Exception {
-        CmmnModel cmmnModel = readXMLFile(CMMN_RESOURCE);
-        validateModel(cmmnModel);
-    }
-
-    @Test
-    public void convertModelToXML() throws Exception {
-        CmmnModel cmmnModel = readXMLFile(CMMN_RESOURCE);
-        CmmnModel parsedModel = exportAndReadXMLFile(cmmnModel);
-        validateModel(parsedModel);
-    }
-
+    @CmmnXmlConverterTest("org/flowable/test/cmmn/converter/script-task.cmmn")
     public void validateModel(CmmnModel cmmnModel) {
         assertThat(cmmnModel).isNotNull();
 
@@ -71,29 +57,31 @@ public class ScriptServiceTaskCmmnXmlConverterTest extends AbstractConverterTest
         assertThat(planItems).hasSize(2);
 
         PlanItem planItemTaskA = cmmnModel.findPlanItem("planItemTaskA");
-        PlanItemDefinition planItemDefinition = planItemTaskA.getPlanItemDefinition();
-
         assertThat(planItemTaskA.getEntryCriteria()).isEmpty();
-        assertThat(planItemDefinition).isInstanceOf(ScriptServiceTask.class);
-        ScriptServiceTask scriptTask = (ScriptServiceTask) planItemDefinition;
-        assertThat(scriptTask.getType()).isEqualTo(ScriptServiceTask.SCRIPT_TASK);
-        assertThat(scriptTask.getScriptFormat()).isEqualTo("javascript");
-        assertThat(scriptTask.getResultVariableName()).isEqualTo("scriptResult");
-        assertThat(scriptTask.isAutoStoreVariables()).isFalse();
-        assertThat(scriptTask.isBlocking()).isTrue();
-        assertThat(scriptTask.isAsync()).isFalse();
 
-        assertThat(scriptTask.getFieldExtensions())
-                .extracting(FieldExtension::getFieldName, FieldExtension::getStringValue)
-                .containsExactly(tuple("script", "var a = 5;"));
+        PlanItemDefinition planItemDefinition = planItemTaskA.getPlanItemDefinition();
+        assertThat(planItemDefinition)
+                .isInstanceOfSatisfying(ScriptServiceTask.class, scriptTask -> {
+                    assertThat(scriptTask.getType()).isEqualTo(ScriptServiceTask.SCRIPT_TASK);
+                    assertThat(scriptTask.getScriptFormat()).isEqualTo("javascript");
+                    assertThat(scriptTask.getResultVariableName()).isEqualTo("scriptResult");
+                    assertThat(scriptTask.isAutoStoreVariables()).isFalse();
+                    assertThat(scriptTask.isBlocking()).isTrue();
+                    assertThat(scriptTask.isAsync()).isFalse();
+
+                    assertThat(scriptTask.getFieldExtensions())
+                            .extracting(FieldExtension::getFieldName, FieldExtension::getStringValue)
+                            .containsExactly(tuple("script", "var a = 5;"));
+                });
 
         PlanItem planItemTaskB = cmmnModel.findPlanItem("planItemTaskB");
         planItemDefinition = planItemTaskB.getPlanItemDefinition();
-        assertThat(planItemDefinition).isInstanceOfSatisfying(ScriptServiceTask.class, scriptServiceTask -> {
-            assertThat(scriptServiceTask.getScriptFormat()).isEqualTo("groovy");
-            assertThat(scriptServiceTask.getScript()).isEqualTo("var b = 5;");
-            assertThat(scriptServiceTask.isAutoStoreVariables()).isTrue();
-        });
+        assertThat(planItemDefinition)
+                .isInstanceOfSatisfying(ScriptServiceTask.class, scriptServiceTask -> {
+                    assertThat(scriptServiceTask.getScriptFormat()).isEqualTo("groovy");
+                    assertThat(scriptServiceTask.getScript()).isEqualTo("var b = 5;");
+                    assertThat(scriptServiceTask.isAutoStoreVariables()).isTrue();
+                });
     }
 
 }

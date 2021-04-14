@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
+import org.flowable.common.engine.api.scope.ScopeTypes;
 import org.flowable.common.engine.impl.AbstractEngineConfiguration;
 import org.flowable.common.engine.impl.HasExpressionManagerEngineConfiguration;
 import org.flowable.common.engine.impl.cfg.BeansConfigurationHelper;
@@ -25,8 +26,10 @@ import org.flowable.common.engine.impl.el.DefaultExpressionManager;
 import org.flowable.common.engine.impl.el.ExpressionManager;
 import org.flowable.common.engine.impl.interceptor.CommandInterceptor;
 import org.flowable.common.engine.impl.interceptor.EngineConfigurationConstants;
+import org.flowable.common.engine.impl.javax.el.ELResolver;
 import org.flowable.common.engine.impl.persistence.deploy.DefaultDeploymentCache;
 import org.flowable.common.engine.impl.persistence.deploy.DeploymentCache;
+import org.flowable.common.engine.impl.persistence.entity.TableDataManager;
 import org.flowable.editor.form.converter.FormJsonConverter;
 import org.flowable.form.api.FormEngineConfigurationApi;
 import org.flowable.form.api.FormManagementService;
@@ -57,8 +60,6 @@ import org.flowable.form.engine.impl.persistence.entity.FormInstanceEntityManage
 import org.flowable.form.engine.impl.persistence.entity.FormInstanceEntityManagerImpl;
 import org.flowable.form.engine.impl.persistence.entity.FormResourceEntityManager;
 import org.flowable.form.engine.impl.persistence.entity.FormResourceEntityManagerImpl;
-import org.flowable.form.engine.impl.persistence.entity.TableDataManager;
-import org.flowable.form.engine.impl.persistence.entity.TableDataManagerImpl;
 import org.flowable.form.engine.impl.persistence.entity.data.FormDefinitionDataManager;
 import org.flowable.form.engine.impl.persistence.entity.data.FormDeploymentDataManager;
 import org.flowable.form.engine.impl.persistence.entity.data.FormInstanceDataManager;
@@ -100,9 +101,11 @@ public class FormEngineConfiguration extends AbstractEngineConfiguration
     protected FormDefinitionEntityManager formDefinitionEntityManager;
     protected FormResourceEntityManager resourceEntityManager;
     protected FormInstanceEntityManager formInstanceEntityManager;
-    protected TableDataManager tableDataManager;
 
     protected ExpressionManager expressionManager;
+    protected Collection<ELResolver> preDefaultELResolvers;
+    protected Collection<ELResolver> preBeanELResolvers;
+    protected Collection<ELResolver> postDefaultELResolvers;
 
     protected FormJsonConverter formJsonConverter = new FormJsonConverter();
 
@@ -165,6 +168,8 @@ public class FormEngineConfiguration extends AbstractEngineConfiguration
         initEngineConfigurations();
         initConfigurators();
         configuratorsBeforeInit();
+        initClock();
+        initBeans();
         initExpressionManager();
         initCommandContextFactory();
         initTransactionContextFactory();
@@ -180,7 +185,6 @@ public class FormEngineConfiguration extends AbstractEngineConfiguration
             initSchemaManagementCommand();
         }
 
-        initBeans();
         initTransactionFactory();
 
         if (usingRelationalDatabase) {
@@ -193,7 +197,6 @@ public class FormEngineConfiguration extends AbstractEngineConfiguration
         initDataManagers();
         initEntityManagers();
         initDeployers();
-        initClock();
     }
 
     // services
@@ -207,7 +210,19 @@ public class FormEngineConfiguration extends AbstractEngineConfiguration
 
     public void initExpressionManager() {
         if (expressionManager == null) {
-            expressionManager = new DefaultExpressionManager();
+            DefaultExpressionManager formExpressionManager = new DefaultExpressionManager(beans);
+            if (preDefaultELResolvers != null) {
+                preDefaultELResolvers.forEach(formExpressionManager::addPreDefaultResolver);
+            }
+
+            if (preBeanELResolvers != null) {
+                preBeanELResolvers.forEach(formExpressionManager::addPreBeanResolver);
+            }
+
+            if (postDefaultELResolvers != null) {
+                postDefaultELResolvers.forEach(formExpressionManager::addPostDefaultResolver);
+            }
+            expressionManager = formExpressionManager;
         }
     }
 
@@ -245,9 +260,6 @@ public class FormEngineConfiguration extends AbstractEngineConfiguration
         }
         if (formInstanceEntityManager == null) {
             formInstanceEntityManager = new FormInstanceEntityManagerImpl(this, formInstanceDataManager);
-        }
-        if (tableDataManager == null) {
-            tableDataManager = new TableDataManagerImpl(this);
         }
     }
 
@@ -339,6 +351,11 @@ public class FormEngineConfiguration extends AbstractEngineConfiguration
     @Override
     public String getEngineCfgKey() {
         return EngineConfigurationConstants.KEY_FORM_ENGINE_CONFIG;
+    }
+    
+    @Override
+    public String getEngineScopeType() {
+        return ScopeTypes.FORM;
     }
 
     @Override
@@ -583,10 +600,7 @@ public class FormEngineConfiguration extends AbstractEngineConfiguration
         return this;
     }
 
-    public TableDataManager getTableDataManager() {
-        return tableDataManager;
-    }
-
+    @Override
     public FormEngineConfiguration setTableDataManager(TableDataManager tableDataManager) {
         this.tableDataManager = tableDataManager;
         return this;
@@ -600,6 +614,60 @@ public class FormEngineConfiguration extends AbstractEngineConfiguration
     @Override
     public FormEngineConfiguration setExpressionManager(ExpressionManager expressionManager) {
         this.expressionManager = expressionManager;
+        return this;
+    }
+
+    public Collection<ELResolver> getPreDefaultELResolvers() {
+        return preDefaultELResolvers;
+    }
+
+    public FormEngineConfiguration setPreDefaultELResolvers(Collection<ELResolver> preDefaultELResolvers) {
+        this.preDefaultELResolvers = preDefaultELResolvers;
+        return this;
+    }
+
+    public FormEngineConfiguration addPreDefaultELResolver(ELResolver elResolver) {
+        if (this.preDefaultELResolvers == null) {
+            this.preDefaultELResolvers = new ArrayList<>();
+        }
+
+        this.preDefaultELResolvers.add(elResolver);
+        return this;
+    }
+
+    public Collection<ELResolver> getPreBeanELResolvers() {
+        return preBeanELResolvers;
+    }
+
+    public FormEngineConfiguration setPreBeanELResolvers(Collection<ELResolver> preBeanELResolvers) {
+        this.preBeanELResolvers = preBeanELResolvers;
+        return this;
+    }
+
+    public FormEngineConfiguration addPreBeanELResolver(ELResolver elResolver) {
+        if (this.preBeanELResolvers == null) {
+            this.preBeanELResolvers = new ArrayList<>();
+        }
+
+        this.preBeanELResolvers.add(elResolver);
+        return this;
+    }
+
+    public Collection<ELResolver> getPostDefaultELResolvers() {
+        return postDefaultELResolvers;
+    }
+
+    public FormEngineConfiguration setPostDefaultELResolvers(Collection<ELResolver> postDefaultELResolvers) {
+        this.postDefaultELResolvers = postDefaultELResolvers;
+        return this;
+    }
+
+    public FormEngineConfiguration addPostDefaultELResolver(ELResolver elResolver) {
+        if (this.postDefaultELResolvers == null) {
+            this.postDefaultELResolvers = new ArrayList<>();
+        }
+
+        this.postDefaultELResolvers.add(elResolver);
         return this;
     }
 

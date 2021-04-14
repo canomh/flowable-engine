@@ -32,20 +32,23 @@ public class CompleteCaseInstanceOperation extends AbstractDeleteCaseInstanceOpe
     }
 
     @Override
-    protected String getNewState() {
+    public String getNewState() {
         return CaseInstanceState.COMPLETED;
     }
     
     @Override
-    protected void changeStateForChildPlanItemInstance(PlanItemInstanceEntity planItemInstanceEntity) {
-        CommandContextUtil.getAgenda(commandContext).planCompletePlanItemInstanceOperation(planItemInstanceEntity);
+    public void changeStateForChildPlanItemInstance(PlanItemInstanceEntity planItemInstanceEntity) {
+        // terminate all child plan items not yet in an end state of the case itself (same way as with a stage for instance)
+        // if they would be completed, the history will contain completed plan item instances although they never "truly" completed
+        // specially important for cases supporting reactivation
+        CommandContextUtil.getAgenda(commandContext).planTerminatePlanItemInstanceOperation(planItemInstanceEntity, null, null);
     }
     
     @Override
-    protected String getDeleteReason() {
+    public String getDeleteReason() {
         return "cmmn-state-transition-complete-case";
     }
-    
+
     @Override
     public String toString() {
         StringBuilder strb = new StringBuilder();

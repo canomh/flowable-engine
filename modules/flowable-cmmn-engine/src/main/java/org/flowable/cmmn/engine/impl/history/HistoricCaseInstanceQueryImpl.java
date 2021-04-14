@@ -20,12 +20,12 @@ import java.util.Set;
 
 import org.flowable.cmmn.api.history.HistoricCaseInstance;
 import org.flowable.cmmn.api.history.HistoricCaseInstanceQuery;
+import org.flowable.cmmn.engine.CmmnEngineConfiguration;
 import org.flowable.cmmn.engine.impl.IdentityLinkQueryObject;
 import org.flowable.cmmn.engine.impl.cmd.DeleteHistoricCaseInstancesCmd;
 import org.flowable.cmmn.engine.impl.cmd.DeleteRelatedDataOfRemovedHistoricCaseInstancesCmd;
 import org.flowable.cmmn.engine.impl.cmd.DeleteTaskAndPlanItemInstanceDataOfRemovedHistoricCaseInstancesCmd;
 import org.flowable.cmmn.engine.impl.persistence.entity.HistoricCaseInstanceEntity;
-import org.flowable.cmmn.engine.impl.util.CommandContextUtil;
 import org.flowable.common.engine.api.FlowableException;
 import org.flowable.common.engine.api.FlowableIllegalArgumentException;
 import org.flowable.common.engine.api.query.CacheAwareQuery;
@@ -46,6 +46,8 @@ public class HistoricCaseInstanceQueryImpl extends AbstractVariableQueryImpl<His
         implements HistoricCaseInstanceQuery, CacheAwareQuery<HistoricCaseInstanceEntity> {
 
     private static final long serialVersionUID = 1L;
+    
+    protected CmmnEngineConfiguration cmmnEngineConfiguration;
     
     protected String caseDefinitionId;
     protected String caseDefinitionKey;
@@ -68,6 +70,9 @@ public class HistoricCaseInstanceQueryImpl extends AbstractVariableQueryImpl<His
     protected Date finishedBefore;
     protected Date finishedAfter;
     protected String startedBy;
+    protected Date lastReactivatedBefore;
+    protected Date lastReactivatedAfter;
+    protected String lastReactivatedBy;
     protected String callbackId;
     protected String callbackType;
     protected String referenceId;
@@ -76,6 +81,8 @@ public class HistoricCaseInstanceQueryImpl extends AbstractVariableQueryImpl<His
     protected boolean withoutTenantId;
     protected boolean includeCaseVariables;
     protected Integer caseVariablesLimit;
+    protected String activePlanItemDefinitionId;
+    protected Set<String> activePlanItemDefinitionIds;
     protected String involvedUser;
     protected IdentityLinkQueryObject involvedUserIdentityLink;
     protected Set<String> involvedGroups;
@@ -87,12 +94,14 @@ public class HistoricCaseInstanceQueryImpl extends AbstractVariableQueryImpl<His
     public HistoricCaseInstanceQueryImpl() {
     }
 
-    public HistoricCaseInstanceQueryImpl(CommandContext commandContext) {
-        super(commandContext);
+    public HistoricCaseInstanceQueryImpl(CommandContext commandContext, CmmnEngineConfiguration cmmnEngineConfiguration) {
+        super(commandContext, cmmnEngineConfiguration.getVariableServiceConfiguration());
+        this.cmmnEngineConfiguration = cmmnEngineConfiguration;
     }
 
-    public HistoricCaseInstanceQueryImpl(CommandExecutor commandExecutor) {
-        super(commandExecutor);
+    public HistoricCaseInstanceQueryImpl(CommandExecutor commandExecutor, CmmnEngineConfiguration cmmnEngineConfiguration) {
+        super(commandExecutor, cmmnEngineConfiguration.getVariableServiceConfiguration());
+        this.cmmnEngineConfiguration = cmmnEngineConfiguration;
     }
 
     @Override
@@ -346,7 +355,48 @@ public class HistoricCaseInstanceQueryImpl extends AbstractVariableQueryImpl<His
 
         return this;
     }
-    
+
+    @Override
+    public HistoricCaseInstanceQuery lastReactivatedBefore(Date beforeTime) {
+        if (beforeTime == null) {
+            throw new FlowableIllegalArgumentException("before time is null");
+        }
+        if (inOrStatement) {
+            this.currentOrQueryObject.lastReactivatedBefore = beforeTime;
+        } else {
+            this.lastReactivatedBefore = beforeTime;
+        }
+        return this;
+    }
+
+    @Override
+    public HistoricCaseInstanceQuery lastReactivatedAfter(Date afterTime) {
+        if (afterTime == null) {
+            throw new FlowableIllegalArgumentException("after time is null");
+        }
+        if (inOrStatement) {
+            this.currentOrQueryObject.lastReactivatedAfter = afterTime;
+        } else {
+            this.lastReactivatedAfter = afterTime;
+        }
+
+        return this;
+    }
+
+    @Override
+    public HistoricCaseInstanceQuery lastReactivatedBy(String userId) {
+        if (userId == null) {
+            throw new FlowableIllegalArgumentException("user id is null");
+        }
+        if (inOrStatement) {
+            this.currentOrQueryObject.lastReactivatedBy = userId;
+        } else {
+            this.lastReactivatedBy = userId;
+        }
+
+        return this;
+    }
+
     @Override
     public HistoricCaseInstanceQuery caseInstanceCallbackId(String callbackId) {
         if (callbackId == null) {
@@ -471,7 +521,7 @@ public class HistoricCaseInstanceQueryImpl extends AbstractVariableQueryImpl<His
     @Override
     public long executeCount(CommandContext commandContext) {
         ensureVariablesInitialized();
-        return CommandContextUtil.getHistoricCaseInstanceEntityManager(commandContext).countByCriteria(this);
+        return cmmnEngineConfiguration.getHistoricCaseInstanceEntityManager().countByCriteria(this);
     }
 
     @Override
@@ -479,14 +529,14 @@ public class HistoricCaseInstanceQueryImpl extends AbstractVariableQueryImpl<His
         ensureVariablesInitialized();
         List<HistoricCaseInstance> results;
         if (includeCaseVariables) {
-            results = CommandContextUtil.getHistoricCaseInstanceEntityManager(commandContext).findWithVariablesByQueryCriteria(this);
+            results = cmmnEngineConfiguration.getHistoricCaseInstanceEntityManager().findWithVariablesByQueryCriteria(this);
 
             if (caseInstanceId != null) {
                 addCachedVariableForQueryById(commandContext, results);
             }
 
         } else {
-            results = CommandContextUtil.getHistoricCaseInstanceEntityManager(commandContext).findByCriteria(this);
+            results = cmmnEngineConfiguration.getHistoricCaseInstanceEntityManager().findByCriteria(this);
         }
 
         return results;
@@ -524,7 +574,7 @@ public class HistoricCaseInstanceQueryImpl extends AbstractVariableQueryImpl<His
     public void enhanceCachedValue(HistoricCaseInstanceEntity caseInstance) {
         if (isIncludeCaseVariables()) {
             caseInstance.getQueryVariables()
-                    .addAll(CommandContextUtil.getVariableServiceConfiguration().getHistoricVariableInstanceEntityManager()
+                    .addAll(cmmnEngineConfiguration.getVariableServiceConfiguration().getHistoricVariableInstanceEntityManager()
                             .findHistoricalVariableInstancesByScopeIdAndScopeType(caseInstance.getId(), ScopeTypes.CMMN));
         }
     }
@@ -559,6 +609,32 @@ public class HistoricCaseInstanceQueryImpl extends AbstractVariableQueryImpl<His
     @Override
     public HistoricCaseInstanceQuery limitCaseVariables(Integer historicCaseVariablesLimit) {
         this.caseVariablesLimit = historicCaseVariablesLimit;
+        return this;
+    }
+    
+    @Override
+    public HistoricCaseInstanceQuery activePlanItemDefinitionId(String planItemDefinitionId) {
+        if (planItemDefinitionId == null) {
+            throw new FlowableIllegalArgumentException("planItemDefinitionId is null");
+        }
+        if (inOrStatement) {
+            this.currentOrQueryObject.activePlanItemDefinitionId = planItemDefinitionId;
+        } else {
+            this.activePlanItemDefinitionId = planItemDefinitionId;
+        }
+        return this;
+    }
+    
+    @Override
+    public HistoricCaseInstanceQuery activePlanItemDefinitionIds(Set<String> planItemDefinitionIds) {
+        if (planItemDefinitionIds == null) {
+            throw new FlowableIllegalArgumentException("planItemDefinitionIds is null");
+        }
+        if (inOrStatement) {
+            this.currentOrQueryObject.activePlanItemDefinitionIds = planItemDefinitionIds;
+        } else {
+            this.activePlanItemDefinitionIds = planItemDefinitionIds;
+        }
         return this;
     }
 
@@ -630,7 +706,11 @@ public class HistoricCaseInstanceQueryImpl extends AbstractVariableQueryImpl<His
         }
 
         inOrStatement = true;
-        currentOrQueryObject = new HistoricCaseInstanceQueryImpl();
+        if (commandContext != null) {
+            currentOrQueryObject = new HistoricCaseInstanceQueryImpl(commandContext, cmmnEngineConfiguration);
+        } else {
+            currentOrQueryObject = new HistoricCaseInstanceQueryImpl(commandExecutor, cmmnEngineConfiguration);
+        }
         orQueryObjects.add(currentOrQueryObject);
         return this;
     }
@@ -886,6 +966,14 @@ public class HistoricCaseInstanceQueryImpl extends AbstractVariableQueryImpl<His
 
     public boolean isWithoutTenantId() {
         return withoutTenantId;
+    }
+
+    public String getActivePlanItemDefinitionId() {
+        return activePlanItemDefinitionId;
+    }
+
+    public Set<String> getActivePlanItemDefinitionIds() {
+        return activePlanItemDefinitionIds;
     }
 
     public String getInvolvedUser() {

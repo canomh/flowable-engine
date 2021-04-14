@@ -55,8 +55,16 @@ public class JobEntityManagerImpl
         }
 
         jobEntity.setCreateTime(getClock().getCurrentTime());
+        if (jobEntity.getCorrelationId() == null) {
+            jobEntity.setCorrelationId(serviceConfiguration.getIdGenerator().getNextId());
+        }
         super.insert(jobEntity, fireCreateEvent);
         return true;
+    }
+
+    @Override
+    public JobEntity findJobByCorrelationId(String correlationId) {
+        return dataManager.findJobByCorrelationId(correlationId);
     }
 
     @Override
@@ -71,7 +79,7 @@ public class JobEntityManagerImpl
 
     @Override
     public void delete(JobEntity jobEntity) {
-        super.delete(jobEntity, false);
+        delete(jobEntity, false);
 
         deleteByteArrayRef(jobEntity.getExceptionByteArrayRef());
         deleteByteArrayRef(jobEntity.getCustomValuesByteArrayRef());
@@ -79,7 +87,8 @@ public class JobEntityManagerImpl
         // Send event
         FlowableEventDispatcher eventDispatcher = getEventDispatcher();
         if (eventDispatcher != null && eventDispatcher.isEnabled()) {
-            eventDispatcher.dispatchEvent(FlowableJobEventBuilder.createEntityEvent(FlowableEngineEventType.ENTITY_DELETED, jobEntity));
+            eventDispatcher.dispatchEvent(FlowableJobEventBuilder.createEntityEvent(FlowableEngineEventType.ENTITY_DELETED, jobEntity),
+                    serviceConfiguration.getEngineName());
         }
     }
 

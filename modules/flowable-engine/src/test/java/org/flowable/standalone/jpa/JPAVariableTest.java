@@ -254,7 +254,6 @@ public class JPAVariableTest extends ResourceFlowableTestCase {
         // Set to JPA-entity again
         runtimeService.setVariable(processInstance.getId(), "simpleEntityFieldAccess", simpleEntityFieldAccess);
         currentValue = runtimeService.getVariable(processInstance.getId(), "simpleEntityFieldAccess");
-        assertThat(currentValue).isNotNull();
         assertThat(currentValue).isInstanceOf(FieldAccessJPAEntity.class);
         assertThat(((FieldAccessJPAEntity) currentValue).getId().longValue()).isEqualTo(1L);
 
@@ -348,7 +347,7 @@ public class JPAVariableTest extends ResourceFlowableTestCase {
         Object fieldAccessResult = runtimeService.getVariable(processInstance.getId(), "simpleEntityFieldAccess");
         assertThat(fieldAccessResult).isInstanceOf(List.class);
         List<?> list = (List<?>) fieldAccessResult;
-        assertThat(list.size()).isEqualTo(3L);
+        assertThat(list).hasSize(3);
         assertThat(list.get(0)).isInstanceOf(FieldAccessJPAEntity.class);
         assertThat(simpleEntityFieldAccess.getId()).isEqualTo(((FieldAccessJPAEntity) list.get(0)).getId());
 
@@ -356,7 +355,7 @@ public class JPAVariableTest extends ResourceFlowableTestCase {
         Object propertyAccessResult = runtimeService.getVariable(processInstance.getId(), "simpleEntityPropertyAccess");
         assertThat(propertyAccessResult).isInstanceOf(List.class);
         list = (List<?>) propertyAccessResult;
-        assertThat(list.size()).isEqualTo(3L);
+        assertThat(list).hasSize(3);
         assertThat(list.get(0)).isInstanceOf(PropertyAccessJPAEntity.class);
         assertThat(simpleEntityPropertyAccess.getId()).isEqualTo(((PropertyAccessJPAEntity) list.get(0)).getId());
 
@@ -364,7 +363,7 @@ public class JPAVariableTest extends ResourceFlowableTestCase {
         Object subclassFieldResult = runtimeService.getVariable(processInstance.getId(), "subclassFieldAccess");
         assertThat(subclassFieldResult).isInstanceOf(List.class);
         list = (List<?>) subclassFieldResult;
-        assertThat(list.size()).isEqualTo(3L);
+        assertThat(list).hasSize(3);
         assertThat(list.get(0)).isInstanceOf(SubclassFieldAccessJPAEntity.class);
         assertThat(simpleEntityPropertyAccess.getId()).isEqualTo(((SubclassFieldAccessJPAEntity) list.get(0)).getId());
 
@@ -372,7 +371,7 @@ public class JPAVariableTest extends ResourceFlowableTestCase {
         Object subclassPropertyResult = runtimeService.getVariable(processInstance.getId(), "subclassPropertyAccess");
         assertThat(subclassPropertyResult).isInstanceOf(List.class);
         list = (List<?>) subclassPropertyResult;
-        assertThat(list.size()).isEqualTo(3L);
+        assertThat(list).hasSize(3);
         assertThat(list.get(0)).isInstanceOf(SubclassPropertyAccessJPAEntity.class);
         assertThat(simpleEntityPropertyAccess.getId()).isEqualTo(((SubclassPropertyAccessJPAEntity) list.get(0)).getId());
     }
@@ -382,7 +381,7 @@ public class JPAVariableTest extends ResourceFlowableTestCase {
     public void testStoreJPAEntityListAsVariableEdgeCases() {
 
         // Test using mixed JPA-entities which are not serializable, should not
-        // be picked up by JPA list type en therefor fail due to serialization error
+        // be picked up by JPA list type and therefore fail due to serialization error
         assertThatThrownBy(() ->
         {
             Map<String, Object> variables = new HashMap<>();

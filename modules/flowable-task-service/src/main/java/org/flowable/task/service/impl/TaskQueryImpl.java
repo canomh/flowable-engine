@@ -27,15 +27,13 @@ import org.flowable.common.engine.impl.interceptor.CommandContext;
 import org.flowable.common.engine.impl.interceptor.CommandExecutor;
 import org.flowable.common.engine.impl.persistence.cache.EntityCache;
 import org.flowable.idm.api.Group;
-import org.flowable.idm.api.IdmEngineConfigurationApi;
 import org.flowable.idm.api.IdmIdentityService;
 import org.flowable.task.api.DelegationState;
 import org.flowable.task.api.Task;
 import org.flowable.task.api.TaskQuery;
 import org.flowable.task.service.TaskServiceConfiguration;
 import org.flowable.task.service.impl.persistence.entity.TaskEntity;
-import org.flowable.task.service.impl.util.CommandContextUtil;
-import org.flowable.variable.api.types.VariableTypes;
+import org.flowable.variable.service.VariableServiceConfiguration;
 import org.flowable.variable.service.impl.AbstractVariableQueryImpl;
 import org.flowable.variable.service.impl.QueryVariableValue;
 import org.flowable.variable.service.impl.persistence.entity.VariableInstanceEntity;
@@ -49,6 +47,9 @@ import org.flowable.variable.service.impl.persistence.entity.VariableInstanceEnt
 public class TaskQueryImpl extends AbstractVariableQueryImpl<TaskQuery, Task> implements TaskQuery, CacheAwareQuery<TaskEntity> {
 
     private static final long serialVersionUID = 1L;
+    
+    protected TaskServiceConfiguration taskServiceConfiguration;
+    protected IdmIdentityService idmIdentityService;
 
     protected String taskId;
     protected String name;
@@ -72,6 +73,7 @@ public class TaskQueryImpl extends AbstractVariableQueryImpl<TaskQuery, Task> im
     protected String ownerLike;
     protected String ownerLikeIgnoreCase;
     protected boolean unassigned;
+    protected boolean withAssignee;
     protected boolean noDelegationState;
     protected DelegationState delegationState;
     protected String candidateUser;
@@ -81,7 +83,6 @@ public class TaskQueryImpl extends AbstractVariableQueryImpl<TaskQuery, Task> im
     protected String tenantId;
     protected String tenantIdLike;
     protected boolean withoutTenantId;
-    protected boolean withoutDeleteReason;
     protected String processInstanceId;
     protected Collection<String> processInstanceIds;
     protected String executionId;
@@ -118,6 +119,10 @@ public class TaskQueryImpl extends AbstractVariableQueryImpl<TaskQuery, Task> im
     protected String processInstanceBusinessKey;
     protected String processInstanceBusinessKeyLike;
     protected String processInstanceBusinessKeyLikeIgnoreCase;
+    protected String caseDefinitionKey;
+    protected String caseDefinitionKeyLike;
+    protected String caseDefinitionKeyLikeIgnoreCase;
+    protected Collection<String> caseDefinitionKeys;
     protected Date dueDate;
     protected Date dueBefore;
     protected Date dueAfter;
@@ -141,17 +146,29 @@ public class TaskQueryImpl extends AbstractVariableQueryImpl<TaskQuery, Task> im
     public TaskQueryImpl() {
     }
 
-    public TaskQueryImpl(CommandContext commandContext) {
-        super(commandContext);
+    public TaskQueryImpl(CommandContext commandContext, TaskServiceConfiguration taskServiceConfiguration, 
+            VariableServiceConfiguration variableServiceConfiguration, IdmIdentityService idmIdentityService) {
+        
+        super(commandContext, variableServiceConfiguration);
+        this.taskServiceConfiguration = taskServiceConfiguration;
+        this.idmIdentityService = idmIdentityService;
     }
 
-    public TaskQueryImpl(CommandExecutor commandExecutor) {
-        super(commandExecutor);
+    public TaskQueryImpl(CommandExecutor commandExecutor, TaskServiceConfiguration taskServiceConfiguration, 
+            VariableServiceConfiguration variableServiceConfiguration, IdmIdentityService idmIdentityService) {
+        
+        super(commandExecutor, variableServiceConfiguration);
+        this.taskServiceConfiguration = taskServiceConfiguration;
+        this.idmIdentityService = idmIdentityService;
     }
 
-    public TaskQueryImpl(CommandExecutor commandExecutor, String databaseType) {
-        super(commandExecutor);
+    public TaskQueryImpl(CommandExecutor commandExecutor, String databaseType, TaskServiceConfiguration taskServiceConfiguration,
+            VariableServiceConfiguration variableServiceConfiguration, IdmIdentityService idmIdentityService) {
+        
+        super(commandExecutor, variableServiceConfiguration);
         this.databaseType = databaseType;
+        this.taskServiceConfiguration = taskServiceConfiguration;
+        this.idmIdentityService = idmIdentityService;
     }
 
     @Override
@@ -480,6 +497,16 @@ public class TaskQueryImpl extends AbstractVariableQueryImpl<TaskQuery, Task> im
     }
 
     @Override
+    public TaskQuery taskAssigned() {
+        if (orActive) {
+            currentOrQueryObject.withAssignee = true;
+        } else {
+            this.withAssignee = true;
+        }
+        return this;
+    }
+
+    @Override
     public TaskQuery taskDelegationState(DelegationState delegationState) {
         if (orActive) {
             if (delegationState == null) {
@@ -648,16 +675,6 @@ public class TaskQueryImpl extends AbstractVariableQueryImpl<TaskQuery, Task> im
     }
 
     @Override
-    public TaskQuery taskWithoutDeleteReason() {
-        if (orActive) {
-            currentOrQueryObject.withoutDeleteReason = true;
-        } else {
-            this.withoutDeleteReason = true;
-        }
-        return this;
-    }
-
-    @Override
     public TaskQueryImpl processInstanceId(String processInstanceId) {
         if (orActive) {
             currentOrQueryObject.processInstanceId = processInstanceId;
@@ -749,6 +766,46 @@ public class TaskQueryImpl extends AbstractVariableQueryImpl<TaskQuery, Task> im
         } else {
             this.scopeDefinitionId(caseDefinitionId);
             this.scopeType(ScopeTypes.CMMN);
+        }
+        return this;
+    }
+
+    @Override
+    public TaskQuery caseDefinitionKey(String caseDefinitionKey) {
+        if (orActive) {
+            currentOrQueryObject.caseDefinitionKey = caseDefinitionKey;
+        } else {
+            this.caseDefinitionKey = caseDefinitionKey;
+        }
+        return this;
+    }
+
+    @Override
+    public TaskQuery caseDefinitionKeyLike(String caseDefinitionKeyLike) {
+        if (orActive) {
+            currentOrQueryObject.caseDefinitionKeyLike = caseDefinitionKeyLike;
+        } else {
+            this.caseDefinitionKeyLike = caseDefinitionKeyLike;
+        }
+        return this;
+    }
+
+    @Override
+    public TaskQuery caseDefinitionKeyLikeIgnoreCase(String caseDefinitionKeyLikeIgnoreCase) {
+        if (orActive) {
+            currentOrQueryObject.caseDefinitionKeyLikeIgnoreCase = caseDefinitionKeyLikeIgnoreCase;
+        } else {
+            this.caseDefinitionKeyLikeIgnoreCase = caseDefinitionKeyLikeIgnoreCase;
+        }
+        return this;
+    }
+
+    @Override
+    public TaskQuery caseDefinitionKeyIn(Collection<String> caseDefinitionKeys) {
+        if (orActive) {
+            currentOrQueryObject.caseDefinitionKeys = caseDefinitionKeys;
+        } else {
+            this.caseDefinitionKeys = caseDefinitionKeys;
         }
         return this;
     }
@@ -1510,14 +1567,10 @@ public class TaskQueryImpl extends AbstractVariableQueryImpl<TaskQuery, Task> im
 
     protected Collection<String> getGroupsForCandidateUser(String candidateUser) {
         Collection<String> groupIds = new ArrayList<>();
-        IdmEngineConfigurationApi idmEngineConfiguration = CommandContextUtil.getIdmEngineConfiguration();
-        if (idmEngineConfiguration != null) {
-            IdmIdentityService idmIdentityService = idmEngineConfiguration.getIdmIdentityService();
-            if (idmIdentityService != null) {
-                List<Group> groups = idmIdentityService.createGroupQuery().groupMember(candidateUser).list();
-                for (Group group : groups) {
-                    groupIds.add(group.getId());
-                }
+        if (idmIdentityService != null) {
+            List<Group> groups = idmIdentityService.createGroupQuery().groupMember(candidateUser).list();
+            for (Group group : groups) {
+                groupIds.add(group.getId());
             }
         }
         return groupIds;
@@ -1525,9 +1578,8 @@ public class TaskQueryImpl extends AbstractVariableQueryImpl<TaskQuery, Task> im
 
     @Override
     protected void ensureVariablesInitialized() {
-        VariableTypes types = CommandContextUtil.getVariableServiceConfiguration().getVariableTypes();
         for (QueryVariableValue var : queryVariableValues) {
-            var.initialize(types);
+            var.initialize(variableServiceConfiguration);
         }
 
         for (TaskQueryImpl orQueryObject : orQueryObjects) {
@@ -1545,7 +1597,11 @@ public class TaskQueryImpl extends AbstractVariableQueryImpl<TaskQuery, Task> im
 
         // Create instance of the orQuery
         orActive = true;
-        currentOrQueryObject = new TaskQueryImpl();
+        if (commandContext != null) {
+            currentOrQueryObject = new TaskQueryImpl(commandContext, taskServiceConfiguration, variableServiceConfiguration, idmIdentityService);
+        } else {
+            currentOrQueryObject = new TaskQueryImpl(commandExecutor, taskServiceConfiguration, variableServiceConfiguration, idmIdentityService);
+        }
         orQueryObjects.add(currentOrQueryObject);
         return this;
     }
@@ -1661,13 +1717,12 @@ public class TaskQueryImpl extends AbstractVariableQueryImpl<TaskQuery, Task> im
     public List<Task> executeList(CommandContext commandContext) {
         ensureVariablesInitialized();
         List<Task> tasks = null;
-        TaskServiceConfiguration taskServiceConfiguration = CommandContextUtil.getTaskServiceConfiguration(commandContext);
         if (taskServiceConfiguration.getTaskQueryInterceptor() != null) {
             taskServiceConfiguration.getTaskQueryInterceptor().beforeTaskQueryExecute(this);
         }
 
         if (includeTaskLocalVariables || includeProcessVariables || includeIdentityLinks) {
-            tasks = CommandContextUtil.getTaskEntityManager(commandContext).findTasksWithRelatedEntitiesByQueryCriteria(this);
+            tasks = taskServiceConfiguration.getTaskEntityManager().findTasksWithRelatedEntitiesByQueryCriteria(this);
 
             if (taskId != null) {
                 if (includeProcessVariables) {
@@ -1678,7 +1733,7 @@ public class TaskQueryImpl extends AbstractVariableQueryImpl<TaskQuery, Task> im
             }
 
         } else {
-            tasks = CommandContextUtil.getTaskEntityManager(commandContext).findTasksByQueryCriteria(this);
+            tasks = taskServiceConfiguration.getTaskEntityManager().findTasksByQueryCriteria(this);
         }
 
         if (tasks != null && taskServiceConfiguration.getInternalTaskLocalizationManager() != null && taskServiceConfiguration.isEnableLocalization()) {
@@ -1720,11 +1775,11 @@ public class TaskQueryImpl extends AbstractVariableQueryImpl<TaskQuery, Task> im
     @Override
     public void enhanceCachedValue(TaskEntity task) {
         if (includeProcessVariables) {
-            task.getQueryVariables().addAll(CommandContextUtil.getVariableServiceConfiguration().getVariableService()
-                    .findVariableInstancesByProcessInstanceId(task.getProcessInstanceId()));
+            task.getQueryVariables().addAll(variableServiceConfiguration.getVariableService()
+                    .findVariableInstancesByExecutionId(task.getProcessInstanceId()));
         } else if (includeTaskLocalVariables) {
             task.getQueryVariables()
-                    .addAll(CommandContextUtil.getVariableServiceConfiguration().getVariableService().findVariableInstancesByTaskId(task.getId()));
+                    .addAll(task.getVariableInstanceEntities().values());
         }
     }
 
@@ -1732,12 +1787,11 @@ public class TaskQueryImpl extends AbstractVariableQueryImpl<TaskQuery, Task> im
     public long executeCount(CommandContext commandContext) {
         ensureVariablesInitialized();
 
-        TaskServiceConfiguration taskServiceConfiguration = CommandContextUtil.getTaskServiceConfiguration(commandContext);
         if (taskServiceConfiguration.getTaskQueryInterceptor() != null) {
             taskServiceConfiguration.getTaskQueryInterceptor().beforeTaskQueryExecute(this);
         }
 
-        return CommandContextUtil.getTaskEntityManager(commandContext).findTaskCountByQueryCriteria(this);
+        return taskServiceConfiguration.getTaskEntityManager().findTaskCountByQueryCriteria(this);
     }
 
     // getters ////////////////////////////////////////////////////////////////
@@ -1764,6 +1818,10 @@ public class TaskQueryImpl extends AbstractVariableQueryImpl<TaskQuery, Task> im
 
     public boolean getUnassigned() {
         return unassigned;
+    }
+    
+    public boolean isWithAssignee() {
+        return withAssignee;
     }
 
     public DelegationState getDelegationState() {
@@ -1825,7 +1883,7 @@ public class TaskQueryImpl extends AbstractVariableQueryImpl<TaskQuery, Task> im
     public String getTaskId() {
         return taskId;
     }
-    
+
     @Override
     public String getId() {
         return taskId;
@@ -2067,16 +2125,44 @@ public class TaskQueryImpl extends AbstractVariableQueryImpl<TaskQuery, Task> im
         return processDefinitionKeyLikeIgnoreCase;
     }
 
-    public boolean isWithoutDeleteReason() {
-        return withoutDeleteReason;
-    }
-
     public String getLocale() {
         return locale;
     }
 
     public boolean isOrActive() {
         return orActive;
+    }
+
+    public boolean isUnassigned() {
+        return unassigned;
+    }
+
+    public boolean isNoDelegationState() {
+        return noDelegationState;
+    }
+
+    public String getCaseDefinitionKey() {
+        return caseDefinitionKey;
+    }
+
+    public String getCaseDefinitionKeyLike() {
+        return caseDefinitionKeyLike;
+    }
+
+    public String getCaseDefinitionKeyLikeIgnoreCase() {
+        return caseDefinitionKeyLikeIgnoreCase;
+    }
+
+    public Collection<String> getCaseDefinitionKeys() {
+        return caseDefinitionKeys;
+    }
+
+    public boolean isExcludeSubtasks() {
+        return excludeSubtasks;
+    }
+
+    public boolean isWithLocalizationFallback() {
+        return withLocalizationFallback;
     }
 
     @Override

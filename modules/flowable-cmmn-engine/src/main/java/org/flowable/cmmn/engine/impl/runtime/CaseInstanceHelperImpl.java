@@ -13,43 +13,52 @@
 package org.flowable.cmmn.engine.impl.runtime;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.lang3.StringUtils;
 import org.flowable.cmmn.api.CallbackTypes;
+import org.flowable.cmmn.api.history.HistoricCaseInstance;
+import org.flowable.cmmn.api.history.HistoricPlanItemInstance;
 import org.flowable.cmmn.api.repository.CaseDefinition;
-import org.flowable.cmmn.api.runtime.CaseInstance;
 import org.flowable.cmmn.api.runtime.CaseInstanceBuilder;
 import org.flowable.cmmn.api.runtime.CaseInstanceState;
 import org.flowable.cmmn.engine.CmmnEngineConfiguration;
 import org.flowable.cmmn.engine.impl.deployer.CmmnDeploymentManager;
+import org.flowable.cmmn.engine.impl.event.FlowableCmmnEventBuilder;
 import org.flowable.cmmn.engine.impl.job.AsyncInitializePlanModelJobHandler;
-import org.flowable.cmmn.engine.impl.listener.CaseLifeCycleListenerUtil;
+import org.flowable.cmmn.engine.impl.listener.CaseInstanceLifeCycleListenerUtil;
 import org.flowable.cmmn.engine.impl.persistence.entity.CaseDefinitionEntityManager;
 import org.flowable.cmmn.engine.impl.persistence.entity.CaseInstanceEntity;
 import org.flowable.cmmn.engine.impl.persistence.entity.CaseInstanceEntityManager;
+import org.flowable.cmmn.engine.impl.persistence.entity.HistoricPlanItemInstanceEntityManager;
 import org.flowable.cmmn.engine.impl.persistence.entity.PlanItemInstanceEntity;
+import org.flowable.cmmn.engine.impl.persistence.entity.PlanItemInstanceEntityManager;
 import org.flowable.cmmn.engine.impl.repository.CaseDefinitionUtil;
 import org.flowable.cmmn.engine.impl.task.TaskHelper;
 import org.flowable.cmmn.engine.impl.util.CmmnLoggingSessionUtil;
 import org.flowable.cmmn.engine.impl.util.CommandContextUtil;
 import org.flowable.cmmn.engine.impl.util.EntityLinkUtil;
 import org.flowable.cmmn.engine.impl.util.EventInstanceCmmnUtil;
+import org.flowable.cmmn.engine.impl.util.JobUtil;
 import org.flowable.cmmn.engine.interceptor.StartCaseInstanceAfterContext;
 import org.flowable.cmmn.engine.interceptor.StartCaseInstanceBeforeContext;
 import org.flowable.cmmn.model.Case;
 import org.flowable.cmmn.model.CmmnModel;
-import org.flowable.cmmn.model.ExtensionElement;
+import org.flowable.cmmn.model.ReactivateEventListener;
 import org.flowable.cmmn.model.Stage;
 import org.flowable.common.engine.api.FlowableIllegalArgumentException;
+import org.flowable.common.engine.api.FlowableIllegalStateException;
 import org.flowable.common.engine.api.FlowableObjectNotFoundException;
-import org.flowable.common.engine.api.delegate.Expression;
+import org.flowable.common.engine.api.delegate.event.FlowableEventDispatcher;
 import org.flowable.common.engine.api.scope.ScopeTypes;
 import org.flowable.common.engine.impl.callback.CallbackData;
 import org.flowable.common.engine.impl.callback.RuntimeInstanceStateChangeCallback;
 import org.flowable.common.engine.impl.identity.Authentication;
 import org.flowable.common.engine.impl.interceptor.CommandContext;
+import org.flowable.common.engine.impl.interceptor.EngineConfigurationConstants;
 import org.flowable.common.engine.impl.logging.CmmnLoggingSessionConstants;
 import org.flowable.eventregistry.api.runtime.EventInstance;
 import org.flowable.eventregistry.impl.constant.EventConstants;
@@ -59,16 +68,27 @@ import org.flowable.form.api.FormRepositoryService;
 import org.flowable.form.api.FormService;
 import org.flowable.job.service.JobService;
 import org.flowable.job.service.impl.persistence.entity.JobEntity;
+import org.flowable.variable.api.history.HistoricVariableInstance;
+import org.flowable.variable.api.types.VariableTypes;
+import org.flowable.variable.service.VariableService;
 import org.flowable.variable.service.impl.el.NoExecutionVariableScope;
+import org.flowable.variable.service.impl.persistence.entity.VariableInstanceEntity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * @author Joram Barrez
+ * @author Micha Kiener
  */
 public class CaseInstanceHelperImpl implements CaseInstanceHelper {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(CaseInstanceHelperImpl.class);
+    
+    protected CmmnEngineConfiguration cmmnEngineConfiguration;
+    
+    public CaseInstanceHelperImpl(CmmnEngineConfiguration cmmnEngineConfiguration) {
+        this.cmmnEngineConfiguration = cmmnEngineConfiguration;
+    }
 
     @Override
     public CaseInstanceEntity startCaseInstance(CaseInstanceBuilder caseInstanceBuilder) {
@@ -82,18 +102,21 @@ public class CaseInstanceHelperImpl implements CaseInstanceHelper {
         return startCaseInstanceAsync(commandContext, getCaseDefinition(caseInstanceBuilder, commandContext), caseInstanceBuilder);
     }
 
+    @Override
+    public CaseInstanceEntity copyHistoricCaseInstanceToRuntime(HistoricCaseInstance caseInstance) {
+        CommandContext commandContext = CommandContextUtil.getCommandContext();
+        CaseDefinitionEntityManager caseDefinitionEntityManager = cmmnEngineConfiguration.getCaseDefinitionEntityManager();
+        CaseDefinition caseDefinition = caseDefinitionEntityManager.findById(caseInstance.getCaseDefinitionId());
+        CaseInstanceEntity caseInstanceEntity = copyHistoricCaseInstanceToRuntime(commandContext, caseDefinition, caseInstance);
+        return caseInstanceEntity;
+    }
+
     protected CaseDefinition getCaseDefinition(CaseInstanceBuilder caseInstanceBuilder, CommandContext commandContext) {
         CaseDefinition caseDefinition = null;
-        CmmnEngineConfiguration cmmnEngineConfiguration = CommandContextUtil.getCmmnEngineConfiguration(commandContext);
         if (caseInstanceBuilder.getCaseDefinitionId() != null) {
             String caseDefinitionId = caseInstanceBuilder.getCaseDefinitionId();
-            CaseDefinitionEntityManager definitionEntityManager = cmmnEngineConfiguration.getCaseDefinitionEntityManager();
-            if (caseDefinitionId != null) {
-                caseDefinition = definitionEntityManager.findById(caseDefinitionId);
-                if (caseDefinition == null) {
-                    throw new FlowableObjectNotFoundException("No case definition found for id " + caseDefinitionId, CaseDefinition.class);
-                }
-            }
+            CmmnDeploymentManager deploymentManager = cmmnEngineConfiguration.getDeploymentManager();
+            caseDefinition = deploymentManager.findDeployedCaseDefinitionById(caseDefinitionId);
 
         } else if (caseInstanceBuilder.getCaseDefinitionKey() != null) {
             String caseDefinitionKey = caseInstanceBuilder.getCaseDefinitionKey();
@@ -170,39 +193,47 @@ public class CaseInstanceHelperImpl implements CaseInstanceHelper {
                 cmmnModel, caseModel, caseInstanceBuilder);
 
         // create a job to execute InitPlanModelOperation, which will take care of initializing all the child plan items of that stage
-        JobService jobService = CommandContextUtil.getCmmnEngineConfiguration(commandContext).getJobServiceConfiguration().getJobService();
+        JobService jobService = cmmnEngineConfiguration.getJobServiceConfiguration().getJobService();
         createAsyncInitJob(caseInstanceEntity, caseDefinition, caseModel, jobService, commandContext);
 
         return caseInstanceEntity;
     }
 
+    /**
+     * This is the first part of reactivating a case instance from the history. It copies the historic data back to the runtime which is the case instance,
+     * its plan items and the variables. This method does not trigger the reactivation listener, just checks, if it is there, but there is no reactivation
+     * of plan items, etc. Just the copy of the historic data back to the runtime.
+     *
+     * @param commandContext the command context to execute within
+     * @param caseDefinition the case definition to get the case model from
+     * @param caseInstance the historic case instance to copy back to the runtime
+     * @return the copied runtime case instance entity for further processing
+     */
+    protected CaseInstanceEntity copyHistoricCaseInstanceToRuntime(CommandContext commandContext, CaseDefinition caseDefinition, HistoricCaseInstance caseInstance) {
+        CmmnModel cmmnModel = getCmmnModel(commandContext, caseDefinition);
+        Case caseModel = getCaseModel(caseDefinition, cmmnModel);
+
+        ReactivateEventListener listener = caseModel.getReactivateEventListener();
+        if (listener == null) {
+            // the reactivation event listener must be present in order to reactivate the case, there is no generic way as it is always business driven
+            // on what happens during reactivation
+            throw new FlowableIllegalStateException("The historic case instance " + caseInstance.getId()
+                + " cannot be reactivated as there is no reactivation event in its CMMN model. You need to explicitly model the reactivation event in order to support case reactivation.");
+        }
+
+        // recreate the case instance in the runtime data table from the historic one
+        return createCaseInstanceEntityFromHistoricCaseInstance(commandContext, caseInstance);
+    }
+
     protected void createAsyncInitJob(CaseInstanceEntity caseInstance, CaseDefinition caseDefinition, 
             Case caseModel, JobService jobService, CommandContext commandContext) {
         
-        JobEntity job = jobService.createJob();
-        job.setJobHandlerType(AsyncInitializePlanModelJobHandler.TYPE);
-        job.setScopeId(caseInstance.getId());
-        job.setScopeDefinitionId(caseInstance.getCaseDefinitionId());
-        job.setScopeType(ScopeTypes.CMMN);
+        JobEntity job = JobUtil.createJob(caseInstance, caseModel, AsyncInitializePlanModelJobHandler.TYPE, cmmnEngineConfiguration);
         job.setElementId(caseDefinition.getId());
         job.setElementName(caseDefinition.getName());
         job.setJobHandlerConfiguration(caseInstance.getId());
         
-        List<ExtensionElement> jobCategoryElements = caseModel.getExtensionElements().get("jobCategory");
-        if (jobCategoryElements != null && jobCategoryElements.size() > 0) {
-            ExtensionElement jobCategoryElement = jobCategoryElements.get(0);
-            if (StringUtils.isNotEmpty(jobCategoryElement.getElementText())) {
-                CmmnEngineConfiguration cmmnEngineConfiguration = CommandContextUtil.getCmmnEngineConfiguration(commandContext);
-                Expression categoryExpression = cmmnEngineConfiguration.getExpressionManager().createExpression(jobCategoryElement.getElementText());
-                Object categoryValue = categoryExpression.getValue(caseInstance);
-                if (categoryValue != null) {
-                    job.setCategory(categoryValue.toString());
-                }
-            }
-        }
-        
-        job.setTenantId(caseInstance.getTenantId());
-        jobService.createAsyncJob(job, true);
+        jobService.createAsyncJob(job, false);
         jobService.scheduleAsyncJob(job);
     }
     
@@ -219,8 +250,6 @@ public class CaseInstanceHelperImpl implements CaseInstanceHelper {
     protected CaseInstanceEntity initializeCaseInstanceEntity(CommandContext commandContext, CaseDefinition caseDefinition, 
             CmmnModel cmmnModel, Case caseModel, CaseInstanceBuilder caseInstanceBuilder) {
         
-        CmmnEngineConfiguration cmmnEngineConfiguration = CommandContextUtil.getCmmnEngineConfiguration(commandContext);
-
         StartCaseInstanceBeforeContext instanceBeforeContext = new StartCaseInstanceBeforeContext(caseInstanceBuilder.getBusinessKey(), caseInstanceBuilder.getName(),
                         caseInstanceBuilder.getCallbackId(), caseInstanceBuilder.getCallbackType(),
                         caseInstanceBuilder.getReferenceId(), caseInstanceBuilder.getReferenceType(),
@@ -237,9 +266,10 @@ public class CaseInstanceHelperImpl implements CaseInstanceHelper {
 
         if (cmmnEngineConfiguration.isEnableEntityLinks()) {
             if (CallbackTypes.PLAN_ITEM_CHILD_CASE.equals(caseInstanceEntity.getCallbackType())) {
-                PlanItemInstanceEntity planItemInstanceEntity = CommandContextUtil
-                    .getPlanItemInstanceEntityManager(commandContext).findById(caseInstanceEntity.getCallbackId());
-                EntityLinkUtil.createEntityLinks(planItemInstanceEntity.getCaseInstanceId(), caseInstanceEntity.getId(), ScopeTypes.CMMN);
+                PlanItemInstanceEntity planItemInstanceEntity = cmmnEngineConfiguration.getPlanItemInstanceEntityManager()
+                        .findById(caseInstanceEntity.getCallbackId());
+                EntityLinkUtil.createEntityLinks(planItemInstanceEntity.getCaseInstanceId(), planItemInstanceEntity.getId(),
+                        planItemInstanceEntity.getPlanItemDefinitionId(), caseInstanceEntity.getId(), ScopeTypes.CMMN, cmmnEngineConfiguration);
             }
         }
 
@@ -250,14 +280,21 @@ public class CaseInstanceHelperImpl implements CaseInstanceHelper {
             cmmnEngineConfiguration.getStartCaseInstanceInterceptor().afterStartCaseInstance(instanceAfterContext);
         }
 
-        CaseLifeCycleListenerUtil.callLifecycleListeners(commandContext, caseInstanceEntity, "", CaseInstanceState.ACTIVE);
+        CaseInstanceLifeCycleListenerUtil.callLifecycleListeners(commandContext, caseInstanceEntity, "", CaseInstanceState.ACTIVE);
 
-        callCaseInstanceStateChangeCallbacks(commandContext, caseInstanceEntity, null, CaseInstanceState.ACTIVE);
-        CommandContextUtil.getCmmnHistoryManager(commandContext).recordCaseInstanceStart(caseInstanceEntity);
+        CallbackData callbackData = new CallbackData(caseInstanceEntity.getCallbackId(), caseInstanceEntity.getCallbackType(),
+            caseInstanceEntity.getId(), null, CaseInstanceState.ACTIVE);
+        callCaseInstanceStateChangeCallbacks(callbackData);
+        cmmnEngineConfiguration.getCmmnHistoryManager().recordCaseInstanceStart(caseInstanceEntity);
         
+        FlowableEventDispatcher eventDispatcher = cmmnEngineConfiguration.getEventDispatcher();
+        if (eventDispatcher != null && eventDispatcher.isEnabled()) {
+            eventDispatcher.dispatchEvent(FlowableCmmnEventBuilder.createCaseStartedEvent(caseInstanceEntity), EngineConfigurationConstants.KEY_CMMN_ENGINE_CONFIG);
+        }
+
         if (cmmnEngineConfiguration.isLoggingSessionEnabled()) {
             CmmnLoggingSessionUtil.addLoggingData(CmmnLoggingSessionConstants.TYPE_CASE_STARTED, "Started case instance with id " + 
-                            caseInstanceEntity.getId(), caseInstanceEntity);
+                    caseInstanceEntity.getId(), caseInstanceEntity, cmmnEngineConfiguration.getObjectMapper());
         }
 
         return caseInstanceEntity;
@@ -340,7 +377,7 @@ public class CaseInstanceHelperImpl implements CaseInstanceHelper {
                             formRepositoryService, cmmnEngineConfiguration);
 
                     if (formInfo != null) {
-                        FormFieldHandler formFieldHandler = CommandContextUtil.getCmmnEngineConfiguration().getFormFieldHandler();
+                        FormFieldHandler formFieldHandler = cmmnEngineConfiguration.getFormFieldHandler();
                         // validate input before anything else
                         if (isFormFieldValidationEnabled(cmmnEngineConfiguration, planModel)) {
                             formService.validateFormFields(formInfo, startFormVariables);
@@ -407,15 +444,18 @@ public class CaseInstanceHelperImpl implements CaseInstanceHelper {
     protected CaseInstanceEntity createCaseInstanceEntityFromDefinition(CommandContext commandContext, 
                     CaseDefinition caseDefinition, StartCaseInstanceBeforeContext instanceBeforeContext) {
         
-        CaseInstanceEntityManager caseInstanceEntityManager = CommandContextUtil.getCaseInstanceEntityManager(commandContext);
+        CaseInstanceEntityManager caseInstanceEntityManager = cmmnEngineConfiguration.getCaseInstanceEntityManager();
         CaseInstanceEntity caseInstanceEntity = caseInstanceEntityManager.create();
         
         if (instanceBeforeContext.getPredefinedCaseInstanceId() != null) {
             caseInstanceEntity.setId(instanceBeforeContext.getPredefinedCaseInstanceId());
         }
         
-        CmmnEngineConfiguration cmmnEngineConfiguration = CommandContextUtil.getCmmnEngineConfiguration(commandContext);
         caseInstanceEntity.setCaseDefinitionId(caseDefinition.getId());
+        caseInstanceEntity.setCaseDefinitionKey(caseDefinition.getKey());
+        caseInstanceEntity.setCaseDefinitionName(caseDefinition.getName());
+        caseInstanceEntity.setCaseDefinitionVersion(caseDefinition.getVersion());
+        caseInstanceEntity.setCaseDefinitionDeploymentId(caseDefinition.getDeploymentId());
         caseInstanceEntity.setStartTime(cmmnEngineConfiguration.getClock().getCurrentTime());
         caseInstanceEntity.setState(CaseInstanceState.ACTIVE);
         caseInstanceEntity.setTenantId(caseDefinition.getTenantId());
@@ -429,15 +469,102 @@ public class CaseInstanceHelperImpl implements CaseInstanceHelper {
         return caseInstanceEntity;
     }
 
+    /**
+     * Creates a new runtime case instance based on the given historic one by copying all of its data, but setting its state to active again. Plan items as
+     * well as variables are copied to the runtime as well. The historic instance is reflecting the same state as well as it is no longer terminated.
+     *
+     * @param commandContext the command context to execute within
+     * @param historicCaseInstance the historic case instance to be copied back to the runtime
+     * @return the newly created runtime case instance, initialized from the historic one
+     */
+    protected CaseInstanceEntity createCaseInstanceEntityFromHistoricCaseInstance(CommandContext commandContext, HistoricCaseInstance historicCaseInstance) {
+        CaseInstanceEntityManager caseInstanceEntityManager = cmmnEngineConfiguration.getCaseInstanceEntityManager();
+
+        // copy the case variables first so we can directly set it on the new case instance so they don't get reloaded later
+        Map<String, VariableInstanceEntity> variables = createCaseVariablesFromHistoricCaseInstance(historicCaseInstance);
+        CaseInstanceEntity caseInstanceEntity = caseInstanceEntityManager.create(historicCaseInstance, variables);
+        caseInstanceEntityManager.insert(caseInstanceEntity);
+
+        // create runtime plan items from the history and set them as the new child plan item list
+        caseInstanceEntity.setChildPlanItemInstances(createCasePlanItemsFromHistoricCaseInstance(historicCaseInstance, caseInstanceEntity));
+        return caseInstanceEntity;
+    }
+
+    /**
+     * Creates new plan item instances for the runtime according the historic ones, even though they are all completed, ended or terminated. Later on, they
+     * might be reactivated according the case model, but this is not part of this method.
+     *
+     * @param historicCaseInstance the historic case instance to copy the plan items from
+     * @param newCaseInstance the newly created runtime copy of the historic case instance where the new plan items are attached to
+     * @return the list of newly copied plan item instances in the runtime
+     */
+    protected List<PlanItemInstanceEntity> createCasePlanItemsFromHistoricCaseInstance(HistoricCaseInstance historicCaseInstance, CaseInstanceEntity newCaseInstance) {
+        HistoricPlanItemInstanceEntityManager planItemInstanceEntityManager = cmmnEngineConfiguration.getHistoricPlanItemInstanceEntityManager();
+        PlanItemInstanceEntityManager historicPlanItemInstanceEntityManager = cmmnEngineConfiguration.getPlanItemInstanceEntityManager();
+
+        // move plan items back to runtime data, all of them as we will loop through them later to see which ones need to be reactivated according the
+        // reactivation sentry modeling, but this will be done as part of the reactivation operation on the agenda
+        List<HistoricPlanItemInstance> historicPlanItemInstances = planItemInstanceEntityManager.createHistoricPlanItemInstanceQuery()
+            .planItemInstanceCaseInstanceId(historicCaseInstance.getId())
+            .list();
+
+        List<PlanItemInstanceEntity> planItemInstances = new ArrayList<>(historicPlanItemInstances.size());
+        for (HistoricPlanItemInstance historicPlanItemInstance : historicPlanItemInstances) {
+            // create a new plan item instance in the runtime table with exactly the same data as in the history (even the id, this way we don't even have to
+            // rebuild the tree of stages and its child plan items and later on, they get updated from the runtime as well)
+            PlanItemInstanceEntity newPlanItemInstance = historicPlanItemInstanceEntityManager.create(historicPlanItemInstance);
+            historicPlanItemInstanceEntityManager.insert(newPlanItemInstance);
+            planItemInstances.add(newPlanItemInstance);
+        }
+
+        return planItemInstances;
+    }
+
+    /**
+     * Creates new variables in the runtime according the history of the provided case instance.
+     *
+     * @param historicCaseInstance the historic case instance to copy its variables back to the runtime
+     * @return the map of the created variables
+     */
+    protected Map<String, VariableInstanceEntity> createCaseVariablesFromHistoricCaseInstance(HistoricCaseInstance historicCaseInstance) {
+        VariableService variableService = cmmnEngineConfiguration.getVariableServiceConfiguration().getVariableService();
+        VariableTypes variableTypes = cmmnEngineConfiguration.getVariableTypes();
+        List<HistoricVariableInstance> variables = cmmnEngineConfiguration.getCmmnHistoryService()
+            .createHistoricVariableInstanceQuery()
+            .caseInstanceId(historicCaseInstance.getId())
+            .list();
+
+        if (variables != null) {
+            Map<String, VariableInstanceEntity> newVars = new HashMap<>(variables.size());
+            for (HistoricVariableInstance variable : variables) {
+                // only make a copy, if it is a case variable, we don't copy locally scoped ones (e.g. from stages), as those plan items are practically
+                // finished
+                if (variable.getSubScopeId() == null) {
+                    VariableInstanceEntity newVariable = variableService.createVariableInstance(
+                        variable.getVariableName(), variableTypes.getVariableType(variable.getVariableTypeName()), variable.getValue());
+
+                    newVariable.setId(variable.getId());
+                    newVariable.setScopeId(historicCaseInstance.getId());
+                    newVariable.setScopeType(variable.getScopeType());
+
+                    variableService.insertVariableInstance(newVariable);
+                    newVars.put(newVariable.getName(), newVariable);
+                }
+            }
+            return newVars;
+        }
+        return Collections.emptyMap();
+    }
+
     @Override
-    public void callCaseInstanceStateChangeCallbacks(CommandContext commandContext, CaseInstance caseInstance, String oldState, String newState) {
-        if (caseInstance.getCallbackId() != null && caseInstance.getCallbackType() != null) {
-            Map<String, List<RuntimeInstanceStateChangeCallback>> caseInstanceCallbacks = CommandContextUtil
-                    .getCmmnEngineConfiguration(commandContext).getCaseInstanceStateChangeCallbacks();
-            if (caseInstanceCallbacks != null && caseInstanceCallbacks.containsKey(caseInstance.getCallbackType())) {
-                for (RuntimeInstanceStateChangeCallback caseInstanceCallback : caseInstanceCallbacks.get(caseInstance.getCallbackType())) {
-                    CallbackData callBackData = new CallbackData(caseInstance.getCallbackId(), caseInstance.getCallbackType(), caseInstance.getId(), oldState, newState);
-                    caseInstanceCallback.stateChanged(callBackData);
+    public void callCaseInstanceStateChangeCallbacks(CallbackData callbackData) {
+        String callbackId = callbackData.getCallbackId();
+        String callbackType = callbackData.getCallbackType();
+        if (callbackId != null && callbackType != null) {
+            Map<String, List<RuntimeInstanceStateChangeCallback>> caseInstanceCallbacks = cmmnEngineConfiguration.getCaseInstanceStateChangeCallbacks();
+            if (caseInstanceCallbacks != null && caseInstanceCallbacks.containsKey(callbackType)) {
+                for (RuntimeInstanceStateChangeCallback caseInstanceCallback : caseInstanceCallbacks.get(callbackType)) {
+                    caseInstanceCallback.stateChanged(callbackData);
                 }
             }
         }

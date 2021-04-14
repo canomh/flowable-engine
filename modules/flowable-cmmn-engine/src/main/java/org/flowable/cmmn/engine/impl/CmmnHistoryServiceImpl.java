@@ -20,6 +20,7 @@ import org.flowable.cmmn.api.history.HistoricCaseInstanceQuery;
 import org.flowable.cmmn.api.history.HistoricMilestoneInstanceQuery;
 import org.flowable.cmmn.api.history.HistoricPlanItemInstanceQuery;
 import org.flowable.cmmn.api.history.HistoricVariableInstanceQuery;
+import org.flowable.cmmn.api.reactivation.CaseReactivationBuilder;
 import org.flowable.cmmn.engine.CmmnEngineConfiguration;
 import org.flowable.cmmn.engine.impl.cmd.CmmnDeleteHistoricTaskLogEntryCmd;
 import org.flowable.cmmn.engine.impl.cmd.DeleteHistoricCaseInstanceCmd;
@@ -32,6 +33,7 @@ import org.flowable.cmmn.engine.impl.cmd.GetHistoricIdentityLinksForPlanItemInst
 import org.flowable.cmmn.engine.impl.cmd.GetHistoricIdentityLinksForTaskCmd;
 import org.flowable.cmmn.engine.impl.cmd.GetHistoricStageOverviewCmd;
 import org.flowable.cmmn.engine.impl.history.CmmnHistoricVariableInstanceQueryImpl;
+import org.flowable.cmmn.engine.impl.reactivation.CaseReactivationBuilderImpl;
 import org.flowable.common.engine.impl.service.CommonEngineServiceImpl;
 import org.flowable.entitylink.api.history.HistoricEntityLink;
 import org.flowable.identitylink.api.history.HistoricIdentityLink;
@@ -66,7 +68,7 @@ public class CmmnHistoryServiceImpl extends CommonEngineServiceImpl<CmmnEngineCo
     
     @Override
     public HistoricVariableInstanceQuery createHistoricVariableInstanceQuery() {
-        return new CmmnHistoricVariableInstanceQueryImpl(commandExecutor);
+        return new CmmnHistoricVariableInstanceQueryImpl(commandExecutor, configuration);
     }
 
     @Override
@@ -86,14 +88,20 @@ public class CmmnHistoryServiceImpl extends CommonEngineServiceImpl<CmmnEngineCo
 
     @Override
     public HistoricTaskInstanceQuery createHistoricTaskInstanceQuery() {
-        return new HistoricTaskInstanceQueryImpl(commandExecutor);
+        return new HistoricTaskInstanceQueryImpl(commandExecutor, configuration.getDatabaseType(),
+                configuration.getTaskServiceConfiguration(), configuration.getVariableServiceConfiguration());
     }
     
     @Override
     public void deleteHistoricTaskInstance(String taskId) {
         commandExecutor.execute(new DeleteHistoricTaskInstanceCmd(taskId));
     }
-    
+
+    @Override
+    public CaseReactivationBuilder createCaseReactivationBuilder(String caseInstanceId) {
+        return new CaseReactivationBuilderImpl(commandExecutor, caseInstanceId);
+    }
+
     @Override
     public List<HistoricIdentityLink> getHistoricIdentityLinksForCaseInstance(String caseInstanceId) {
         return commandExecutor.execute(new GetHistoricIdentityLinksForCaseInstanceCmd(caseInstanceId));
@@ -126,27 +134,27 @@ public class CmmnHistoryServiceImpl extends CommonEngineServiceImpl<CmmnEngineCo
 
     @Override
     public void deleteHistoricTaskLogEntry(long logNumber) {
-        commandExecutor.execute(new CmmnDeleteHistoricTaskLogEntryCmd(logNumber));
+        commandExecutor.execute(new CmmnDeleteHistoricTaskLogEntryCmd(logNumber, configuration));
     }
 
     @Override
     public HistoricTaskLogEntryBuilder createHistoricTaskLogEntryBuilder(TaskInfo task) {
-        return new HistoricTaskLogEntryBuilderImpl(commandExecutor, task);
+        return new HistoricTaskLogEntryBuilderImpl(commandExecutor, task, configuration.getTaskServiceConfiguration());
     }
 
     @Override
     public HistoricTaskLogEntryBuilder createHistoricTaskLogEntryBuilder() {
-        return new HistoricTaskLogEntryBuilderImpl(commandExecutor);
+        return new HistoricTaskLogEntryBuilderImpl(commandExecutor, configuration.getTaskServiceConfiguration());
     }
 
     @Override
     public HistoricTaskLogEntryQuery createHistoricTaskLogEntryQuery() {
-        return new HistoricTaskLogEntryQueryImpl(commandExecutor);
+        return new HistoricTaskLogEntryQueryImpl(commandExecutor, configuration.getTaskServiceConfiguration());
     }
 
     @Override
     public NativeHistoricTaskLogEntryQuery createNativeHistoricTaskLogEntryQuery() {
-        return new NativeHistoricTaskLogEntryQueryImpl(commandExecutor);
+        return new NativeHistoricTaskLogEntryQueryImpl(commandExecutor, configuration.getTaskServiceConfiguration());
     }
 
 }

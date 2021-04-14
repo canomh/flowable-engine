@@ -30,9 +30,15 @@ public interface CaseInstanceEntity extends Entity, EntityWithSentryPartInstance
     void setName(String name);
     void setParentId(String parentId);
     void setCaseDefinitionId(String caseDefinitionId);
+    void setCaseDefinitionKey(String caseDefinitionKey);
+    void setCaseDefinitionName(String caseDefinitionName);
+    void setCaseDefinitionVersion(Integer caseDefinitionVersion);
+    void setCaseDefinitionDeploymentId(String caseDefinitionDeploymentId);
     void setState(String state);
     void setStartTime(Date startTime);
     void setStartUserId(String startUserId);
+    void setLastReactivationTime(Date lastReactivationTime);
+    void setLastReactivationUserId(String lastReactivationUserId);
     void setCallbackId(String callbackId);
     void setCallbackType(String callbackType);
     void setReferenceId(String referenceId);

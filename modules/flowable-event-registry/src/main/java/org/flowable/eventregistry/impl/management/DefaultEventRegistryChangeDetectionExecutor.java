@@ -46,6 +46,13 @@ public class DefaultEventRegistryChangeDetectionExecutor implements EventRegistr
         this.scheduledExecutorService.scheduleAtFixedRate(this.changeDetectionRunnable, initialDelayInMs, delayInMs, TimeUnit.MILLISECONDS);
     }
 
+    @Override
+    public void shutdown() {
+        if (scheduledExecutorService != null) {
+            scheduledExecutorService.shutdown();
+        }
+    }
+
     protected Runnable createChangeDetectionRunnable() {
         return new EventRegistryChangeDetectionRunnable(eventRegistryChangeDetectionManager);
     }
@@ -71,6 +78,7 @@ public class DefaultEventRegistryChangeDetectionExecutor implements EventRegistr
     public EventRegistryChangeDetectionManager getEventRegistryChangeDetectionManager() {
         return eventRegistryChangeDetectionManager;
     }
+    @Override
     public void setEventRegistryChangeDetectionManager(EventRegistryChangeDetectionManager eventRegistryChangeDetectionManager) {
         this.eventRegistryChangeDetectionManager = eventRegistryChangeDetectionManager;
     }

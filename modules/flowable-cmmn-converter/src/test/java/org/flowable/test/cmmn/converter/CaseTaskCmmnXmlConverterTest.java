@@ -22,28 +22,15 @@ import org.flowable.cmmn.model.IOParameter;
 import org.flowable.cmmn.model.PlanItem;
 import org.flowable.cmmn.model.PlanItemDefinition;
 import org.flowable.cmmn.model.Stage;
-import org.junit.Test;
+import org.flowable.test.cmmn.converter.util.CmmnXmlConverterTest;
 
 /**
  * @author martin.grofcik
  */
-public class CaseTaskCmmnXmlConverterTest extends AbstractConverterTest {
+public class CaseTaskCmmnXmlConverterTest {
 
-    private static final String CMMN_RESOURCE = "org/flowable/test/cmmn/converter/case-task.cmmn";
 
-    @Test
-    public void convertXMLToModel() throws Exception {
-        CmmnModel cmmnModel = readXMLFile(CMMN_RESOURCE);
-        validateModel(cmmnModel);
-    }
-
-    @Test
-    public void convertModelToXML() throws Exception {
-        CmmnModel cmmnModel = readXMLFile(CMMN_RESOURCE);
-        CmmnModel parsedModel = exportAndReadXMLFile(cmmnModel);
-        validateModel(parsedModel);
-    }
-
+    @CmmnXmlConverterTest("org/flowable/test/cmmn/converter/case-task.cmmn")
     public void validateModel(CmmnModel cmmnModel) {
         assertThat(cmmnModel).isNotNull();
 
@@ -60,16 +47,16 @@ public class CaseTaskCmmnXmlConverterTest extends AbstractConverterTest {
 
         PlanItem planItemTask1 = cmmnModel.findPlanItem("planItem1");
         PlanItemDefinition planItemDefinition = planItemTask1.getPlanItemDefinition();
-        assertThat(planItemDefinition).isInstanceOf(CaseTask.class);
-        CaseTask task1 = (CaseTask) planItemDefinition;
-        assertThat(task1.getCaseRefExpression()).isEqualTo("caseDefinitionKey");
+        assertThat(planItemDefinition)
+                .isInstanceOfSatisfying(CaseTask.class, task1 -> {
+                    assertThat(task1.getCaseRefExpression()).isEqualTo("caseDefinitionKey");
+                    assertThat(task1.getFallbackToDefaultTenant()).isTrue();
+                    assertThat(task1.isSameDeployment()).isTrue();
 
-        assertThat(task1.getFallbackToDefaultTenant()).isTrue();
-        assertThat(task1.isSameDeployment()).isTrue();
-
-        assertThat(task1.getInParameters())
-                .extracting(IOParameter::getSource, IOParameter::getTarget)
-                .containsExactly(tuple("testSource", "testTarget"));
+                    assertThat(task1.getInParameters())
+                            .extracting(IOParameter::getSource, IOParameter::getTarget)
+                            .containsExactly(tuple("testSource", "testTarget"));
+                });
     }
 
 }

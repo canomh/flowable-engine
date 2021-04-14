@@ -42,10 +42,14 @@ import org.flowable.cmmn.model.HasLifecycleListeners;
 import org.flowable.cmmn.model.HttpServiceTask;
 import org.flowable.cmmn.model.HumanTask;
 import org.flowable.cmmn.model.IOParameter;
+import org.flowable.cmmn.model.ImplementationType;
 import org.flowable.cmmn.model.ParentCompletionRule;
 import org.flowable.cmmn.model.PlanItemControl;
+import org.flowable.cmmn.model.ReactivationRule;
+import org.flowable.cmmn.model.RepetitionRule;
 import org.flowable.cmmn.model.SendEventServiceTask;
 import org.flowable.cmmn.model.ServiceTask;
+import org.flowable.cmmn.model.VariableAggregationDefinition;
 import org.flowable.common.engine.api.FlowableException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,6 +57,7 @@ import org.slf4j.LoggerFactory;
 /**
  * @author Tijs Rademakers
  * @author Joram Barrez
+ * @author Filip Hrisafov
  */
 public class ExtensionElementsXMLConverter extends CaseElementXmlConverter {
 
@@ -83,6 +88,9 @@ public class ExtensionElementsXMLConverter extends CaseElementXmlConverter {
                     } else if (CmmnXmlConstants.ELEMENT_PARENT_COMPLETION_RULE.equals(xtr.getLocalName())) {
                         readParentCompletionRule(xtr, conversionHelper);
 
+                    } else if (CmmnXmlConstants.ELEMENT_REACTIVATION_RULE.equals(xtr.getLocalName())) {
+                        readReactivationRule(xtr, conversionHelper);
+
                     } else if (CmmnXmlConstants.ELEMENT_FIELD.equals(xtr.getLocalName())) {
                         readFieldExtension(xtr, conversionHelper);
 
@@ -108,6 +116,9 @@ public class ExtensionElementsXMLConverter extends CaseElementXmlConverter {
 
                     } else if (CmmnXmlConstants.ELEMENT_EVENT_TYPE.equals(xtr.getLocalName())) {
                         readEventType(xtr, conversionHelper);
+
+                    } else if (CmmnXmlConstants.ELEMENT_VARIABLE_AGGREGATION.equals(xtr.getLocalName())) {
+                        readVariableAggregationDefinition(xtr, conversionHelper);
 
                     } else {
                         ExtensionElement extensionElement = CmmnXmlUtil.parseExtensionElement(xtr);
@@ -187,6 +198,20 @@ public class ExtensionElementsXMLConverter extends CaseElementXmlConverter {
         }
     }
 
+    protected void readReactivationRule(XMLStreamReader xtr, ConversionHelper conversionHelper) {
+        if (conversionHelper.getCurrentCmmnElement() instanceof PlanItemControl) {
+            ReactivationRule reactivationRule = new ReactivationRule();
+            reactivationRule.setName(xtr.getAttributeValue(null, CmmnXmlConstants.ATTRIBUTE_NAME));
+            reactivationRule.setType(xtr.getAttributeValue(null, CmmnXmlConstants.ATTRIBUTE_TYPE));
+            reactivationRule.setCondition(xtr.getAttributeValue(null, CmmnXmlConstants.ATTRIBUTE_REACTIVATION_RULE_CONDITION));
+
+            PlanItemControl planItemControl = (PlanItemControl) conversionHelper.getCurrentCmmnElement();
+            planItemControl.setReactivationRule(reactivationRule);
+
+            readCommonXmlInfo(reactivationRule, xtr);
+        }
+    }
+
     protected void readFieldExtension(XMLStreamReader xtr, ConversionHelper conversionHelper) {
         BaseElement cmmnElement = conversionHelper.getCurrentCmmnElement();
 
@@ -231,7 +256,7 @@ public class ExtensionElementsXMLConverter extends CaseElementXmlConverter {
             ((FlowableListener) currentCmmnElement).getFieldExtensions().add(extension);
 
         } else {
-            throw new FlowableException("Programmatic error: field added to unkown element '" + currentCmmnElement + "'");
+            throw new FlowableException("Programmatic error: field added to unknown element '" + currentCmmnElement + "'");
 
         }
     }
@@ -367,6 +392,54 @@ public class ExtensionElementsXMLConverter extends CaseElementXmlConverter {
             LOGGER.warn("Unsupported eventType detected for element {}", currentCmmnElement);
 
         }
+    }
+
+    protected void readVariableAggregationDefinition(XMLStreamReader xtr, ConversionHelper conversionHelper) {
+        CmmnElement currentCmmnElement = conversionHelper.getCurrentCmmnElement();
+
+        if (currentCmmnElement instanceof RepetitionRule) {
+            RepetitionRule repetitionRule = (RepetitionRule) currentCmmnElement;
+
+            VariableAggregationDefinition aggregationDefinition = new VariableAggregationDefinition();
+
+            if (StringUtils.isNotEmpty(xtr.getAttributeValue(null, ATTRIBUTE_CLASS))) {
+                aggregationDefinition.setImplementation(xtr.getAttributeValue(null, ATTRIBUTE_CLASS));
+                aggregationDefinition.setImplementationType(ImplementationType.IMPLEMENTATION_TYPE_CLASS);
+
+            } else if (StringUtils.isNotEmpty(xtr.getAttributeValue(null, ATTRIBUTE_DELEGATE_EXPRESSION))) {
+                aggregationDefinition.setImplementation(xtr.getAttributeValue(null, ATTRIBUTE_DELEGATE_EXPRESSION));
+                aggregationDefinition.setImplementationType(ImplementationType.IMPLEMENTATION_TYPE_DELEGATEEXPRESSION);
+            }
+
+            aggregationDefinition.setTarget(xtr.getAttributeValue(null, CmmnXmlConstants.ATTRIBUTE_IOPARAMETER_TARGET));
+            aggregationDefinition.setTargetExpression(xtr.getAttributeValue(null, CmmnXmlConstants.ATTRIBUTE_IOPARAMETER_TARGET_EXPRESSION));
+            aggregationDefinition.setStoreAsTransientVariable(Boolean.parseBoolean(xtr.getAttributeValue(null, CmmnXmlConstants.ATTRIBUTE_VARIABLE_AGGREGATION_STORE_AS_TRANSIENT_VARIABLE)));
+            aggregationDefinition.setCreateOverviewVariable(Boolean.parseBoolean(xtr.getAttributeValue(null, CmmnXmlConstants.ATTRIBUTE_VARIABLE_AGGREGATION_CREATE_OVERVIEW)));
+
+            repetitionRule.addAggregation(aggregationDefinition);
+
+            boolean readyWithAggregation = false;
+            try {
+                while (!readyWithAggregation && xtr.hasNext()) {
+                    xtr.next();
+                    if (xtr.isStartElement() && CmmnXmlConstants.ATTRIBUTE_VARIABLE_AGGREGATION_VARIABLE.equalsIgnoreCase(xtr.getLocalName())) {
+                        VariableAggregationDefinition.Variable definition = new VariableAggregationDefinition.Variable();
+
+                        definition.setSource(xtr.getAttributeValue(null, CmmnXmlConstants.ATTRIBUTE_IOPARAMETER_SOURCE));
+                        definition.setSourceExpression(xtr.getAttributeValue(null, CmmnXmlConstants.ATTRIBUTE_IOPARAMETER_SOURCE_EXPRESSION));
+                        definition.setTarget(xtr.getAttributeValue(null, CmmnXmlConstants.ATTRIBUTE_IOPARAMETER_TARGET));
+                        definition.setTargetExpression(xtr.getAttributeValue(null, CmmnXmlConstants.ATTRIBUTE_IOPARAMETER_TARGET_EXPRESSION));
+
+                        aggregationDefinition.addDefinition(definition);
+                    } else if (xtr.isEndElement() && CmmnXmlConstants.ELEMENT_VARIABLE_AGGREGATION.equalsIgnoreCase(xtr.getLocalName())) {
+                        readyWithAggregation = true;
+                    }
+                }
+            } catch (Exception e) {
+                LOGGER.warn("Error parsing collection child elements", e);
+            }
+        }
+
     }
 
     protected void readCommonXmlInfo(BaseElement baseElement, XMLStreamReader xtr) {

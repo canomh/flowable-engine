@@ -17,39 +17,22 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.flowable.bpmn.model.BpmnModel;
 import org.flowable.bpmn.model.FlowElement;
 import org.flowable.bpmn.model.UserTask;
-import org.junit.Test;
+import org.flowable.editor.language.xml.util.BpmnXmlConverterTest;
 
 /**
  * @author Filip Hrisafov
  */
-public class UserTaskSameDeploymentFalseConverterTest extends AbstractConverterTest {
+class UserTaskSameDeploymentFalseConverterTest {
 
-    @Override
-    protected String getResource() {
-        return "userTaskSameDeploymentFalse.bpmn";
-    }
-
-    @Test
-    public void convertXMLToModel() throws Exception {
-        BpmnModel bpmnModel = readXMLFile();
-        validateModel(bpmnModel);
-    }
-
-    @Test
-    public void convertModelToXML() throws Exception {
-        BpmnModel bpmnModel = readXMLFile();
-        BpmnModel parsedModel = exportAndReadXMLFile(bpmnModel);
-        validateModel(parsedModel);
-    }
-
-    protected void validateModel(BpmnModel model) {
+    @BpmnXmlConverterTest("userTaskSameDeploymentFalse.bpmn")
+    void validateModel(BpmnModel model) {
         FlowElement flowElement = model.getMainProcess().getFlowElement("userTask");
         assertThat(flowElement)
                 .isInstanceOfSatisfying(UserTask.class, task -> {
                     assertThat(task.getId()).isEqualTo("userTask");
                     assertThat(task.getFormKey()).isEqualTo("testKey");
                     assertThat(task.isSameDeployment()).isFalse();
+                    assertThat(task.getAttributes()).isEmpty();
                 });
-        assertThat(flowElement.getAttributes()).isEmpty();
     }
 }

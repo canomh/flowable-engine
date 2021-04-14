@@ -19,6 +19,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.flowable.cmmn.api.history.HistoricCaseInstance;
 import org.flowable.cmmn.engine.CmmnEngineConfiguration;
 import org.flowable.cmmn.engine.impl.repository.CaseDefinitionUtil;
 import org.flowable.cmmn.engine.impl.util.CmmnLoggingSessionUtil;
@@ -26,6 +27,7 @@ import org.flowable.cmmn.engine.impl.util.CommandContextUtil;
 import org.flowable.cmmn.model.PlanItem;
 import org.flowable.common.engine.api.scope.ScopeTypes;
 import org.flowable.common.engine.impl.context.Context;
+import org.flowable.variable.service.VariableServiceConfiguration;
 import org.flowable.variable.service.impl.persistence.entity.VariableInitializingList;
 import org.flowable.variable.service.impl.persistence.entity.VariableInstanceEntity;
 import org.flowable.variable.service.impl.persistence.entity.VariableScopeImpl;
@@ -44,6 +46,8 @@ public class CaseInstanceEntityImpl extends AbstractCmmnEngineVariableScopeEntit
     protected String state;
     protected Date startTime;
     protected String startUserId;
+    protected Date lastReactivationTime;
+    protected String lastReactivationUserId;
     protected String callbackId;
     protected String callbackType;
     protected String referenceId;
@@ -59,6 +63,38 @@ public class CaseInstanceEntityImpl extends AbstractCmmnEngineVariableScopeEntit
     protected List<SentryPartInstanceEntity> satisfiedSentryPartInstances;
 
     protected List<VariableInstanceEntity> queryVariables;
+
+    protected String caseDefinitionKey;
+    protected String caseDefinitionName;
+    protected Integer caseDefinitionVersion;
+    protected String caseDefinitionDeploymentId;
+
+    public CaseInstanceEntityImpl() {
+    }
+
+    public CaseInstanceEntityImpl(HistoricCaseInstance historicCaseInstance, Map<String, VariableInstanceEntity> variables) {
+        this.id = historicCaseInstance.getId();
+        this.businessKey = historicCaseInstance.getBusinessKey();
+        this.name = historicCaseInstance.getName();
+        this.parentId = historicCaseInstance.getParentId();
+        this.caseDefinitionId = historicCaseInstance.getCaseDefinitionId();
+        this.caseDefinitionKey = historicCaseInstance.getCaseDefinitionKey();
+        this.caseDefinitionName = historicCaseInstance.getCaseDefinitionName();
+        this.caseDefinitionVersion = historicCaseInstance.getCaseDefinitionVersion();
+        this.caseDefinitionDeploymentId = historicCaseInstance.getCaseDefinitionDeploymentId();
+        this.state = historicCaseInstance.getState();
+        this.startTime = historicCaseInstance.getStartTime();
+        this.startUserId = historicCaseInstance.getStartUserId();
+        this.callbackId = historicCaseInstance.getCallbackId();
+        this.callbackType = historicCaseInstance.getCallbackType();
+        this.referenceId = historicCaseInstance.getReferenceId();
+        this.referenceType = historicCaseInstance.getReferenceType();
+
+        if (historicCaseInstance.getTenantId() != null) {
+            this.tenantId = historicCaseInstance.getTenantId();
+        }
+        this.variableInstances = variables;
+    }
 
     @Override
     public Object getPersistentState() {
@@ -138,6 +174,22 @@ public class CaseInstanceEntityImpl extends AbstractCmmnEngineVariableScopeEntit
         this.startUserId = startUserId;
     }
     @Override
+    public Date getLastReactivationTime() {
+        return lastReactivationTime;
+    }
+    @Override
+    public void setLastReactivationTime(Date lastReactivationTime) {
+        this.lastReactivationTime = lastReactivationTime;
+    }
+    @Override
+    public String getLastReactivationUserId() {
+        return lastReactivationUserId;
+    }
+    @Override
+    public void setLastReactivationUserId(String lastReactivationUserId) {
+        this.lastReactivationUserId = lastReactivationUserId;
+    }
+    @Override
     public boolean isCompletable() {
         return completable;
     }
@@ -146,13 +198,13 @@ public class CaseInstanceEntityImpl extends AbstractCmmnEngineVariableScopeEntit
         this.completable = completable;
     }
     /**
-     * Only here due to MyBatis and the old typo -> can be removed, if we would do a DB update
+     * Only here due to MyBatis and the old typo can be removed, if we would do a DB update
      */
     public boolean isCompleteable() {
         return completable;
     }
     /**
-     * Only here due to MyBatis and the old typo -> can be removed, if we would do a DB update
+     * Only here due to MyBatis and the old typo can be removed, if we would do a DB update
      */
     public void setCompleteable(boolean completable) {
         this.completable = completable;
@@ -256,13 +308,14 @@ public class CaseInstanceEntityImpl extends AbstractCmmnEngineVariableScopeEntit
 
     @Override
     protected Collection<VariableInstanceEntity> loadVariableInstances() {
-        return CommandContextUtil.getVariableService().findVariableInstanceByScopeIdAndScopeType(id, ScopeTypes.CMMN);
+        return getVariableServiceConfiguration().getVariableService()
+                .findVariableInstanceByScopeIdAndScopeType(id, ScopeTypes.CMMN);
     }
 
     @Override
     protected VariableScopeImpl getParentVariableScope() {
         // A case instance is the root of variables.
-        // In case of parent-child case instances, the variables needs to be defined explictely in input/outpur vars 
+        // In case of parent-child case instances, the variables needs to be defined explicitly in input/output vars
         return null;
     }
 
@@ -271,7 +324,7 @@ public class CaseInstanceEntityImpl extends AbstractCmmnEngineVariableScopeEntit
         variableInstance.setScopeId(id);
         variableInstance.setScopeType(ScopeTypes.CMMN);
     }
-    
+
     @Override
     protected void addLoggingSessionInfo(ObjectNode loggingNode) {
         CmmnLoggingSessionUtil.fillLoggingData(loggingNode, this);
@@ -279,17 +332,34 @@ public class CaseInstanceEntityImpl extends AbstractCmmnEngineVariableScopeEntit
 
     @Override
     protected VariableInstanceEntity getSpecificVariable(String variableName) {
-        return CommandContextUtil.getVariableService().findVariableInstanceByScopeIdAndScopeTypeAndName(id, ScopeTypes.CMMN, variableName);
+        return getVariableServiceConfiguration().getVariableService()
+                .createInternalVariableInstanceQuery()
+                .scopeId(id)
+                .withoutSubScopeId()
+                .scopeType(ScopeTypes.CMMN)
+                .name(variableName)
+                .singleResult();
     }
 
     @Override
     protected List<VariableInstanceEntity> getSpecificVariables(Collection<String> variableNames) {
-        return CommandContextUtil.getVariableService().findVariableInstancesByScopeIdAndScopeTypeAndNames(id, ScopeTypes.CMMN, variableNames);
+        return getVariableServiceConfiguration().getVariableService()
+                .createInternalVariableInstanceQuery()
+                .scopeId(id)
+                .withoutSubScopeId()
+                .scopeType(ScopeTypes.CMMN)
+                .names(variableNames)
+                .list();
     }
 
     @Override
     protected boolean isPropagateToHistoricVariable() {
         return true;
+    }
+
+    @Override
+    protected VariableServiceConfiguration getVariableServiceConfiguration() {
+        return CommandContextUtil.getCmmnEngineConfiguration().getVariableServiceConfiguration();
     }
 
     @Override
@@ -324,5 +394,45 @@ public class CaseInstanceEntityImpl extends AbstractCmmnEngineVariableScopeEntit
 
     public void setQueryVariables(List<VariableInstanceEntity> queryVariables) {
         this.queryVariables = queryVariables;
+    }
+
+    @Override
+    public String getCaseDefinitionKey() {
+        return caseDefinitionKey;
+    }
+
+    @Override
+    public void setCaseDefinitionKey(String caseDefinitionKey) {
+        this.caseDefinitionKey = caseDefinitionKey;
+    }
+
+    @Override
+    public String getCaseDefinitionName() {
+        return caseDefinitionName;
+    }
+
+    @Override
+    public void setCaseDefinitionName(String caseDefinitionName) {
+        this.caseDefinitionName = caseDefinitionName;
+    }
+
+    @Override
+    public Integer getCaseDefinitionVersion() {
+        return caseDefinitionVersion;
+    }
+
+    @Override
+    public void setCaseDefinitionVersion(Integer caseDefinitionVersion) {
+        this.caseDefinitionVersion = caseDefinitionVersion;
+    }
+
+    @Override
+    public String getCaseDefinitionDeploymentId() {
+        return caseDefinitionDeploymentId;
+    }
+
+    @Override
+    public void setCaseDefinitionDeploymentId(String caseDefinitionDeploymentId) {
+        this.caseDefinitionDeploymentId = caseDefinitionDeploymentId;
     }
 }

@@ -76,7 +76,20 @@ public class AsyncCmmnHistoryManager extends AbstractAsyncCmmnHistoryManager {
             getAsyncHistorySession().addHistoricData(getJobServiceConfiguration(), CmmnAsyncHistoryConstants.TYPE_CASE_INSTANCE_END, data, caseInstanceEntity.getTenantId());
         }
     }
-    
+
+    @Override
+    public void recordHistoricCaseInstanceReactivated(CaseInstanceEntity caseInstanceEntity) {
+        if (cmmnEngineConfiguration.getHistoryLevel().isAtLeast(HistoryLevel.ACTIVITY)) {
+            ObjectNode data = cmmnEngineConfiguration.getObjectMapper().createObjectNode();
+            putIfNotNull(data, CmmnAsyncHistoryConstants.FIELD_ID, caseInstanceEntity.getId());
+            putIfNotNull(data, CmmnAsyncHistoryConstants.FIELD_STATE, caseInstanceEntity.getState());
+            putIfNotNull(data, CmmnAsyncHistoryConstants.FIELD_LAST_REACTIVATION_TIME, caseInstanceEntity.getLastReactivationTime());
+            putIfNotNull(data, CmmnAsyncHistoryConstants.FIELD_LAST_REACTIVATION_USER_ID, caseInstanceEntity.getLastReactivationUserId());
+
+            getAsyncHistorySession().addHistoricData(getJobServiceConfiguration(), CmmnAsyncHistoryConstants.TYPE_CASE_INSTANCE_REACTIVATE, data, caseInstanceEntity.getTenantId());
+        }
+    }
+
     @Override
     public void recordUpdateCaseInstanceName(CaseInstanceEntity caseInstanceEntity, String name) {
         if (cmmnEngineConfiguration.getHistoryLevel().isAtLeast(HistoryLevel.ACTIVITY)) {
@@ -253,7 +266,13 @@ public class AsyncCmmnHistoryManager extends AbstractAsyncCmmnHistoryManager {
     public void recordPlanItemInstanceCreated(PlanItemInstanceEntity planItemInstanceEntity) {
         recordPlanItemInstanceFull(planItemInstanceEntity, null);
     }
-    
+
+    @Override
+    public void recordPlanItemInstanceReactivated(PlanItemInstanceEntity planItemInstanceEntity) {
+        recordPlanItemInstanceFull(planItemInstanceEntity, null);
+        // TODO: do we need a specific reactivation flag to mark this item being created because of a reactivation?
+    }
+
     @Override
     public void recordPlanItemInstanceUpdated(PlanItemInstanceEntity planItemInstanceEntity) {
         recordPlanItemInstanceFull(planItemInstanceEntity, null);
@@ -262,6 +281,11 @@ public class AsyncCmmnHistoryManager extends AbstractAsyncCmmnHistoryManager {
     @Override
     public void recordPlanItemInstanceAvailable(PlanItemInstanceEntity planItemInstanceEntity) {
         recordPlanItemInstanceFull(planItemInstanceEntity, planItemInstanceEntity.getLastAvailableTime());
+    }
+
+    @Override
+    public void recordPlanItemInstanceUnavailable(PlanItemInstanceEntity planItemInstanceEntity) {
+        recordPlanItemInstanceFull(planItemInstanceEntity, planItemInstanceEntity.getLastUnavailableTime());
     }
 
     @Override
@@ -302,6 +326,17 @@ public class AsyncCmmnHistoryManager extends AbstractAsyncCmmnHistoryManager {
     @Override
     public void recordPlanItemInstanceExit(PlanItemInstanceEntity planItemInstanceEntity) {
         recordPlanItemInstanceFull(planItemInstanceEntity, planItemInstanceEntity.getExitTime());
+    }
+    
+    @Override
+    public void updateCaseDefinitionIdInHistory(CaseDefinition caseDefinition, CaseInstanceEntity caseInstance) {
+        if (cmmnEngineConfiguration.getHistoryLevel().isAtLeast(HistoryLevel.ACTIVITY)) {
+            ObjectNode data = cmmnEngineConfiguration.getObjectMapper().createObjectNode();
+            putIfNotNull(data, CmmnAsyncHistoryConstants.FIELD_ID, caseInstance.getId());
+            putIfNotNull(data, CmmnAsyncHistoryConstants.FIELD_CASE_DEFINITION_ID, caseDefinition.getId());
+            putIfNotNull(data, CmmnAsyncHistoryConstants.FIELD_CASE_INSTANCE_ID, caseInstance.getId());
+            getAsyncHistorySession().addHistoricData(getJobServiceConfiguration(), CmmnAsyncHistoryConstants.TYPE_UPDATE_CASE_DEFINITION_CASCADE, data);
+        }
     }
 
     @Override

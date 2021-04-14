@@ -25,7 +25,6 @@ import org.flowable.cmmn.engine.impl.persistence.entity.CaseInstanceEntityImpl;
 import org.flowable.cmmn.engine.test.CmmnDeployment;
 import org.flowable.cmmn.engine.test.FlowableCmmnTestCase;
 import org.flowable.job.api.Job;
-import org.flowable.job.service.impl.asyncexecutor.AcquiredJobEntities;
 import org.flowable.job.service.impl.cmd.AcquireJobsCmd;
 import org.flowable.job.service.impl.cmd.LockExclusiveJobCmd;
 import org.flowable.job.service.impl.persistence.entity.JobEntity;
@@ -85,9 +84,9 @@ public class ClearCaseInstanceLocksTest extends FlowableCmmnTestCase {
         // Acquire jobs (mimic the async executor behavior)
         List<JobInfoEntity> acquiredJobs = new ArrayList<>();
         while (acquiredJobs.size() < 5) {
-            AcquiredJobEntities acquiredJobEntities = cmmnEngineConfiguration.getCommandExecutor()
+            List<? extends JobInfoEntity> jobs = cmmnEngineConfiguration.getCommandExecutor()
                 .execute(new AcquireJobsCmd(cmmnEngineConfiguration.getAsyncExecutor()));
-            acquiredJobs.addAll(acquiredJobEntities.getJobs());
+            acquiredJobs.addAll(jobs);
         }
 
         // Validate lock owner and time set after acquiring
@@ -95,10 +94,9 @@ public class ClearCaseInstanceLocksTest extends FlowableCmmnTestCase {
         for (JobInfoEntity acquiredJob : acquiredJobs) {
 
             // Mimic the async executor
-            cmmnEngineConfiguration.getCommandExecutor().execute(new LockExclusiveJobCmd((Job) acquiredJob));
+            cmmnEngineConfiguration.getCommandExecutor().execute(new LockExclusiveJobCmd((Job) acquiredJob, cmmnEngineConfiguration.getJobServiceConfiguration()));
 
             // After locking, the lockowner should be shared by the job and the process instance
-            assertThat(acquiredJob.getLockOwner()).isNotNull();
             assertThat(acquiredJob.getLockOwner()).isEqualTo(cmmnEngineConfiguration.getAsyncExecutor().getLockOwner());
             assertThat(acquiredJob.getLockExpirationTime()).isNotNull();
 
@@ -110,7 +108,7 @@ public class ClearCaseInstanceLocksTest extends FlowableCmmnTestCase {
         }
 
         // Clearing the locks should now remove the lock owner and lock time from all process instances
-        cmmnEngineConfiguration.getCommandExecutor().execute(new ClearCaseInstanceLockTimesCmd());
+        cmmnEngineConfiguration.getCommandExecutor().execute(new ClearCaseInstanceLockTimesCmd(cmmnEngineConfiguration.getAsyncExecutor().getLockOwner(), cmmnEngineConfiguration));
 
         for (CaseInstance caseInstance : cmmnRuntimeService.createCaseInstanceQuery().list()) {
             assertThat(((CaseInstanceEntity) caseInstance).getLockTime()).isNull();

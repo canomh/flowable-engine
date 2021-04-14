@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
+import org.flowable.common.engine.api.scope.ScopeTypes;
 import org.flowable.common.engine.impl.AbstractEngineConfiguration;
 import org.flowable.common.engine.impl.HasExpressionManagerEngineConfiguration;
 import org.flowable.common.engine.impl.cfg.BeansConfigurationHelper;
@@ -25,9 +26,11 @@ import org.flowable.common.engine.impl.el.DefaultExpressionManager;
 import org.flowable.common.engine.impl.el.ExpressionManager;
 import org.flowable.common.engine.impl.interceptor.CommandInterceptor;
 import org.flowable.common.engine.impl.interceptor.EngineConfigurationConstants;
+import org.flowable.common.engine.impl.javax.el.ELResolver;
 import org.flowable.common.engine.impl.persistence.deploy.DefaultDeploymentCache;
 import org.flowable.common.engine.impl.persistence.deploy.DeploymentCache;
 import org.flowable.common.engine.impl.persistence.deploy.FullDeploymentCache;
+import org.flowable.common.engine.impl.persistence.entity.TableDataManager;
 import org.flowable.eventregistry.api.ChannelModelProcessor;
 import org.flowable.eventregistry.api.EventManagementService;
 import org.flowable.eventregistry.api.EventRegistry;
@@ -67,12 +70,10 @@ import org.flowable.eventregistry.impl.persistence.entity.data.ChannelDefinition
 import org.flowable.eventregistry.impl.persistence.entity.data.EventDefinitionDataManager;
 import org.flowable.eventregistry.impl.persistence.entity.data.EventDeploymentDataManager;
 import org.flowable.eventregistry.impl.persistence.entity.data.EventResourceDataManager;
-import org.flowable.eventregistry.impl.persistence.entity.data.TableDataManager;
 import org.flowable.eventregistry.impl.persistence.entity.data.impl.MybatisChannelDefinitionDataManager;
 import org.flowable.eventregistry.impl.persistence.entity.data.impl.MybatisEventDefinitionDataManager;
 import org.flowable.eventregistry.impl.persistence.entity.data.impl.MybatisEventDeploymentDataManager;
 import org.flowable.eventregistry.impl.persistence.entity.data.impl.MybatisEventResourceDataManager;
-import org.flowable.eventregistry.impl.persistence.entity.data.impl.TableDataManagerImpl;
 import org.flowable.eventregistry.impl.pipeline.DelegateExpressionInboundChannelModelProcessor;
 import org.flowable.eventregistry.impl.pipeline.DelegateExpressionOutboundChannelModelProcessor;
 import org.flowable.eventregistry.impl.pipeline.InMemoryOutboundEventChannelAdapter;
@@ -113,9 +114,11 @@ public class EventRegistryEngineConfiguration extends AbstractEngineConfiguratio
     protected EventDefinitionEntityManager eventDefinitionEntityManager;
     protected ChannelDefinitionEntityManager channelDefinitionEntityManager;
     protected EventResourceEntityManager resourceEntityManager;
-    protected TableDataManager tableDataManager;
 
     protected ExpressionManager expressionManager;
+    protected Collection<ELResolver> preDefaultELResolvers;
+    protected Collection<ELResolver> preBeanELResolvers;
+    protected Collection<ELResolver> postDefaultELResolvers;
 
     protected EventJsonConverter eventJsonConverter = new EventJsonConverter();
     protected ChannelJsonConverter channelJsonConverter = new ChannelJsonConverter();
@@ -210,6 +213,8 @@ public class EventRegistryEngineConfiguration extends AbstractEngineConfiguratio
         initEngineConfigurations();
         initConfigurators();
         configuratorsBeforeInit();
+        initClock();
+        initBeans();
         initExpressionManager();
         initCommandContextFactory();
         initTransactionContextFactory();
@@ -225,7 +230,6 @@ public class EventRegistryEngineConfiguration extends AbstractEngineConfiguratio
             initSchemaManagementCommand();
         }
 
-        initBeans();
         initTransactionFactory();
 
         if (usingRelationalDatabase) {
@@ -243,7 +247,6 @@ public class EventRegistryEngineConfiguration extends AbstractEngineConfiguratio
         initSystemOutboundEventProcessor();
         initChannelDefinitionProcessors();
         initDeployers();
-        initClock();
         initChangeDetectionManager();
         initChangeDetectionExecutor();
     }
@@ -258,7 +261,21 @@ public class EventRegistryEngineConfiguration extends AbstractEngineConfiguratio
 
     public void initExpressionManager() {
         if (expressionManager == null) {
-            expressionManager = new DefaultExpressionManager(beans);
+            DefaultExpressionManager eventRegistryExpressionManager = new DefaultExpressionManager(beans);
+
+            if (preDefaultELResolvers != null) {
+                preDefaultELResolvers.forEach(eventRegistryExpressionManager::addPreDefaultResolver);
+            }
+
+            if (preBeanELResolvers != null) {
+                preBeanELResolvers.forEach(eventRegistryExpressionManager::addPreBeanResolver);
+            }
+
+            if (postDefaultELResolvers != null) {
+                postDefaultELResolvers.forEach(eventRegistryExpressionManager::addPostDefaultResolver);
+            }
+
+            expressionManager = eventRegistryExpressionManager;
         }
     }
 
@@ -296,9 +313,6 @@ public class EventRegistryEngineConfiguration extends AbstractEngineConfiguratio
         }
         if (resourceEntityManager == null) {
             resourceEntityManager = new EventResourceEntityManagerImpl(this, resourceDataManager);
-        }
-        if (tableDataManager == null) {
-            tableDataManager = new TableDataManagerImpl();
         }
     }
 
@@ -390,6 +404,11 @@ public class EventRegistryEngineConfiguration extends AbstractEngineConfiguratio
     @Override
     public String getEngineCfgKey() {
         return EngineConfigurationConstants.KEY_EVENT_REGISTRY_CONFIG;
+    }
+    
+    @Override
+    public String getEngineScopeType() {
+        return ScopeTypes.EVENT_REGISTRY;
     }
 
     @Override
@@ -788,10 +807,7 @@ public class EventRegistryEngineConfiguration extends AbstractEngineConfiguratio
         return this;
     }
 
-    public TableDataManager getTableDataManager() {
-        return tableDataManager;
-    }
-
+    @Override
     public EventRegistryEngineConfiguration setTableDataManager(TableDataManager tableDataManager) {
         this.tableDataManager = tableDataManager;
         return this;
@@ -805,6 +821,60 @@ public class EventRegistryEngineConfiguration extends AbstractEngineConfiguratio
     @Override
     public EventRegistryEngineConfiguration setExpressionManager(ExpressionManager expressionManager) {
         this.expressionManager = expressionManager;
+        return this;
+    }
+
+    public Collection<ELResolver> getPreDefaultELResolvers() {
+        return preDefaultELResolvers;
+    }
+
+    public EventRegistryEngineConfiguration setPreDefaultELResolvers(Collection<ELResolver> preDefaultELResolvers) {
+        this.preDefaultELResolvers = preDefaultELResolvers;
+        return this;
+    }
+
+    public EventRegistryEngineConfiguration addPreDefaultELResolver(ELResolver elResolver) {
+        if (this.preDefaultELResolvers == null) {
+            this.preDefaultELResolvers = new ArrayList<>();
+        }
+
+        this.preDefaultELResolvers.add(elResolver);
+        return this;
+    }
+
+    public Collection<ELResolver> getPreBeanELResolvers() {
+        return preBeanELResolvers;
+    }
+
+    public EventRegistryEngineConfiguration setPreBeanELResolvers(Collection<ELResolver> preBeanELResolvers) {
+        this.preBeanELResolvers = preBeanELResolvers;
+        return this;
+    }
+
+    public EventRegistryEngineConfiguration addPreBeanELResolver(ELResolver elResolver) {
+        if (this.preBeanELResolvers == null) {
+            this.preBeanELResolvers = new ArrayList<>();
+        }
+
+        this.preBeanELResolvers.add(elResolver);
+        return this;
+    }
+
+    public Collection<ELResolver> getPostDefaultELResolvers() {
+        return postDefaultELResolvers;
+    }
+
+    public EventRegistryEngineConfiguration setPostDefaultELResolvers(Collection<ELResolver> postDefaultELResolvers) {
+        this.postDefaultELResolvers = postDefaultELResolvers;
+        return this;
+    }
+
+    public EventRegistryEngineConfiguration addPostDefaultELResolver(ELResolver elResolver) {
+        if (this.postDefaultELResolvers == null) {
+            this.postDefaultELResolvers = new ArrayList<>();
+        }
+
+        this.postDefaultELResolvers.add(elResolver);
         return this;
     }
 

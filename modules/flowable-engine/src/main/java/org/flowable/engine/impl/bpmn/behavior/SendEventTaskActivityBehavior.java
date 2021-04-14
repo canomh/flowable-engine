@@ -33,12 +33,14 @@ import org.flowable.common.engine.impl.el.ExpressionManager;
 import org.flowable.common.engine.impl.interceptor.CommandContext;
 import org.flowable.engine.ProcessEngineConfiguration;
 import org.flowable.engine.delegate.DelegateExecution;
+import org.flowable.engine.impl.cfg.ProcessEngineConfigurationImpl;
 import org.flowable.engine.impl.jobexecutor.AsyncSendEventJobHandler;
 import org.flowable.engine.impl.persistence.entity.ExecutionEntity;
 import org.flowable.engine.impl.util.CommandContextUtil;
 import org.flowable.engine.impl.util.CorrelationUtil;
 import org.flowable.engine.impl.util.CountingEntityUtil;
 import org.flowable.engine.impl.util.EventInstanceBpmnUtil;
+import org.flowable.engine.impl.util.JobUtil;
 import org.flowable.eventregistry.api.EventRegistry;
 import org.flowable.eventregistry.api.EventRepositoryService;
 import org.flowable.eventregistry.api.runtime.EventInstance;
@@ -76,33 +78,19 @@ public class SendEventTaskActivityBehavior extends AbstractBpmnActivityBehavior 
         EventModel eventModel = getEventModel(commandContext, execution);
         ExecutionEntity executionEntity = (ExecutionEntity) execution;
 
+        ProcessEngineConfigurationImpl processEngineConfiguration = CommandContextUtil.getProcessEngineConfiguration(commandContext);
         boolean sendSynchronously = sendEventServiceTask.isSendSynchronously() || executedAsAsyncJob;
         if (!sendSynchronously) {
-            JobService jobService = CommandContextUtil.getJobService(commandContext);
-
-            JobEntity job = jobService.createJob();
-            job.setExecutionId(execution.getId());
-            job.setProcessInstanceId(execution.getProcessInstanceId());
-            job.setProcessDefinitionId(execution.getProcessDefinitionId());
-            job.setElementId(sendEventServiceTask.getId());
-            job.setElementName(sendEventServiceTask.getName());
-            job.setJobHandlerType(AsyncSendEventJobHandler.TYPE);
-
-            // Inherit tenant id (if applicable)
-            if (execution.getTenantId() != null) {
-                job.setTenantId(execution.getTenantId());
-            }
-
-            executionEntity.getJobs().add(job);
+            JobService jobService = processEngineConfiguration.getJobServiceConfiguration().getJobService();
+            
+            JobEntity job = JobUtil.createJob(executionEntity, sendEventServiceTask, AsyncSendEventJobHandler.TYPE, processEngineConfiguration);
 
             jobService.createAsyncJob(job, true);
             jobService.scheduleAsyncJob(job);
 
         } else {
             Collection<EventPayloadInstance> eventPayloadInstances = EventInstanceBpmnUtil.createEventPayloadInstances(executionEntity,
-                CommandContextUtil.getProcessEngineConfiguration(commandContext).getExpressionManager(),
-                execution.getCurrentFlowElement(),
-                eventModel);
+                    processEngineConfiguration.getExpressionManager(), execution.getCurrentFlowElement(), eventModel);
 
             boolean sendOnSystemChannel = isSendOnSystemChannel(execution);
             List<ChannelModel> channelModels = getChannelModels(commandContext, execution, sendOnSystemChannel);
@@ -126,17 +114,17 @@ public class SendEventTaskActivityBehavior extends AbstractBpmnActivityBehavior 
                 triggerEventDefinitionKey = eventModel.getKey();
             }
             
-            EventSubscriptionEntity eventSubscription = (EventSubscriptionEntity) CommandContextUtil
-                .getEventSubscriptionService(commandContext).createEventSubscriptionBuilder()
-                    .eventType(triggerEventDefinitionKey)
-                    .executionId(execution.getId())
-                    .processInstanceId(execution.getProcessInstanceId())
-                    .activityId(execution.getCurrentActivityId())
-                    .processDefinitionId(execution.getProcessDefinitionId())
-                    .scopeType(ScopeTypes.BPMN)
-                    .tenantId(execution.getTenantId())
-                    .configuration(CorrelationUtil.getCorrelationKey(BpmnXMLConstants.ELEMENT_TRIGGER_EVENT_CORRELATION_PARAMETER, commandContext, executionEntity))
-                    .create();
+            EventSubscriptionEntity eventSubscription = (EventSubscriptionEntity) processEngineConfiguration.getEventSubscriptionServiceConfiguration()
+                    .getEventSubscriptionService().createEventSubscriptionBuilder()
+                        .eventType(triggerEventDefinitionKey)
+                        .executionId(execution.getId())
+                        .processInstanceId(execution.getProcessInstanceId())
+                        .activityId(execution.getCurrentActivityId())
+                        .processDefinitionId(execution.getProcessDefinitionId())
+                        .scopeType(ScopeTypes.BPMN)
+                        .tenantId(execution.getTenantId())
+                        .configuration(CorrelationUtil.getCorrelationKey(BpmnXMLConstants.ELEMENT_TRIGGER_EVENT_CORRELATION_PARAMETER, commandContext, executionEntity))
+                        .create();
             
             CountingEntityUtil.handleInsertEventSubscriptionEntityCount(eventSubscription);
             executionEntity.getEventSubscriptions().add(eventSubscription);
@@ -233,7 +221,8 @@ public class SendEventTaskActivityBehavior extends AbstractBpmnActivityBehavior 
             }
 
             CommandContext commandContext = CommandContextUtil.getCommandContext();
-            EventSubscriptionService eventSubscriptionService = CommandContextUtil.getEventSubscriptionService(commandContext);
+            ProcessEngineConfigurationImpl processEngineConfiguration = CommandContextUtil.getProcessEngineConfiguration(commandContext);
+            EventSubscriptionService eventSubscriptionService = processEngineConfiguration.getEventSubscriptionServiceConfiguration().getEventSubscriptionService();
             ExecutionEntity executionEntity = (ExecutionEntity) execution;
             List<EventSubscriptionEntity> eventSubscriptions = executionEntity.getEventSubscriptions();
 

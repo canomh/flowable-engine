@@ -17,6 +17,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.flowable.cmmn.api.runtime.CaseInstance;
 import org.flowable.cmmn.engine.CmmnEngineConfiguration;
 import org.flowable.common.engine.impl.context.Context;
 import org.flowable.variable.service.impl.persistence.entity.HistoricVariableInitializingList;
@@ -35,12 +36,47 @@ public class HistoricCaseInstanceEntityImpl extends AbstractCmmnEngineEntity imp
     protected Date startTime;
     protected Date endTime;
     protected String startUserId;
+    protected Date lastReactivationTime;
+    protected String lastReactivationUserId;
     protected String callbackId;
     protected String callbackType;
     protected String referenceId;
     protected String referenceType;
     protected String tenantId = CmmnEngineConfiguration.NO_TENANT_ID;
     protected List<HistoricVariableInstanceEntity> queryVariables;
+    
+    // non persisted
+    protected String caseDefinitionKey;
+    protected String caseDefinitionName;
+    protected Integer caseDefinitionVersion;
+    protected String caseDefinitionDeploymentId;
+
+    public HistoricCaseInstanceEntityImpl() {
+
+    }
+
+    public HistoricCaseInstanceEntityImpl(CaseInstance caseInstance) {
+        this.id = caseInstance.getId();
+        this.businessKey = caseInstance.getBusinessKey();
+        this.name = caseInstance.getName();
+        this.parentId = caseInstance.getParentId();
+        this.caseDefinitionId = caseInstance.getCaseDefinitionId();
+        this.caseDefinitionKey = caseInstance.getCaseDefinitionKey();
+        this.caseDefinitionName = caseInstance.getCaseDefinitionName();
+        this.caseDefinitionVersion = caseInstance.getCaseDefinitionVersion();
+        this.caseDefinitionDeploymentId = caseInstance.getCaseDefinitionDeploymentId();
+        this.state = caseInstance.getState();
+        this.startTime = caseInstance.getStartTime();
+        this.startUserId = caseInstance.getStartUserId();
+        this.callbackId = caseInstance.getCallbackId();
+        this.callbackType = caseInstance.getCallbackType();
+        this.referenceId = caseInstance.getReferenceId();
+        this.referenceType = caseInstance.getReferenceType();
+
+        if (caseInstance.getTenantId() != null) {
+            this.tenantId = caseInstance.getTenantId();
+        }
+    }
 
     @Override
     public Object getPersistentState() {
@@ -126,6 +162,22 @@ public class HistoricCaseInstanceEntityImpl extends AbstractCmmnEngineEntity imp
         this.startUserId = startUserId;
     }
     @Override
+    public Date getLastReactivationTime() {
+        return lastReactivationTime;
+    }
+    @Override
+    public void setLastReactivationTime(Date lastReactivationTime) {
+        this.lastReactivationTime = lastReactivationTime;
+    }
+    @Override
+    public String getLastReactivationUserId() {
+        return lastReactivationUserId;
+    }
+    @Override
+    public void setLastReactivationUserId(String lastReactivationUserId) {
+        this.lastReactivationUserId = lastReactivationUserId;
+    }
+    @Override
     public String getCallbackId() {
         return callbackId;
     }
@@ -189,5 +241,45 @@ public class HistoricCaseInstanceEntityImpl extends AbstractCmmnEngineEntity imp
 
     public void setQueryVariables(List<HistoricVariableInstanceEntity> queryVariables) {
         this.queryVariables = queryVariables;
+    }
+
+    @Override
+    public String getCaseDefinitionKey() {
+        return caseDefinitionKey;
+    }
+
+    @Override
+    public void setCaseDefinitionKey(String caseDefinitionKey) {
+        this.caseDefinitionKey = caseDefinitionKey;
+    }
+
+    @Override
+    public String getCaseDefinitionName() {
+        return caseDefinitionName;
+    }
+
+    @Override
+    public void setCaseDefinitionName(String caseDefinitionName) {
+        this.caseDefinitionName = caseDefinitionName;
+    }
+
+    @Override
+    public Integer getCaseDefinitionVersion() {
+        return caseDefinitionVersion;
+    }
+
+    @Override
+    public void setCaseDefinitionVersion(Integer caseDefinitionVersion) {
+        this.caseDefinitionVersion = caseDefinitionVersion;
+    }
+
+    @Override
+    public String getCaseDefinitionDeploymentId() {
+        return caseDefinitionDeploymentId;
+    }
+
+    @Override
+    public void setCaseDefinitionDeploymentId(String caseDefinitionDeploymentId) {
+        this.caseDefinitionDeploymentId = caseDefinitionDeploymentId;
     }
 }

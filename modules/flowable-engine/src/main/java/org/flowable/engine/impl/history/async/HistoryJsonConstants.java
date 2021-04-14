@@ -139,6 +139,8 @@ public interface HistoryJsonConstants {
     String ACTIVITY_NAME = "activityName";
 
     String ACTIVITY_TYPE = "activityType";
+    
+    String TRANSACTION_ORDER = "transactionOrder";
 
     String SUPER_PROCESS_INSTANCE_ID = "superProcessInstanceId";
 
@@ -198,6 +200,8 @@ public interface HistoryJsonConstants {
 
     String REFERENCE_TYPE = "referenceType";
 
+    String PROPAGATED_STAGE_INSTANCE_ID = "propagatedStageInstanceId";
+
     String CALLED_PROCESS_INSTANCE_ID = "calledProcessInstanceId";
 
     String SCOPE_ID = "scopeId";
@@ -207,6 +211,8 @@ public interface HistoryJsonConstants {
     String SCOPE_TYPE = "scopeType";
     
     String SCOPE_DEFINITION_ID = "scopeDefinitionId";
+    
+    String PARENT_ELEMENT_ID = "parentElementId";
     
     String REF_SCOPE_ID = "referenceScopeId";
     

@@ -57,6 +57,11 @@ public interface TimerJobQuery extends Query<TimerJobQuery, Job> {
     
     /** Only select jobs for the given scope type. */
     TimerJobQuery scopeType(String scopeType);
+
+    /**
+     * Only return jobs that do not have a scope type.
+     */
+    TimerJobQuery withoutScopeType();
     
     /** Only select tasks for the given scope definition identifier. */
     TimerJobQuery scopeDefinitionId(String scopeDefinitionId);
@@ -69,6 +74,9 @@ public interface TimerJobQuery extends Query<TimerJobQuery, Job> {
     
     /** Only select jobs for the given plan item instance.  */
     TimerJobQuery planItemInstanceId(String planItemInstanceId);
+
+    /** Only select jobs with the given correlationId.  */
+    TimerJobQuery correlationId(String correlationId);
 
     /**
      * Only select jobs which are executable, ie. duedate is null or duedate is in the past
@@ -126,6 +134,11 @@ public interface TimerJobQuery extends Query<TimerJobQuery, Job> {
      * Order by duedate (needs to be followed by {@link #asc()} or {@link #desc()}).
      */
     TimerJobQuery orderByJobDuedate();
+
+    /**
+     * Order by create time (needs to be followed by {@link #asc()} or {@link #desc()}).
+     */
+    TimerJobQuery orderByJobCreateTime();
 
     /**
      * Order by retries (needs to be followed by {@link #asc()} or {@link #desc()}).

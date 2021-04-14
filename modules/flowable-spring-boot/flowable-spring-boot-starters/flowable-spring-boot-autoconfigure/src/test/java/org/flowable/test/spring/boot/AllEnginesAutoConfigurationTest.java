@@ -21,40 +21,39 @@ import java.util.List;
 
 import org.flowable.app.engine.AppEngine;
 import org.flowable.app.spring.SpringAppEngineConfiguration;
-import org.flowable.app.spring.SpringAppExpressionManager;
 import org.flowable.cmmn.api.CmmnHistoryService;
 import org.flowable.cmmn.api.CmmnRuntimeService;
 import org.flowable.cmmn.api.runtime.CaseInstance;
 import org.flowable.cmmn.api.runtime.PlanItemInstance;
 import org.flowable.cmmn.api.runtime.PlanItemInstanceState;
 import org.flowable.cmmn.engine.CmmnEngine;
+import org.flowable.cmmn.engine.impl.el.CmmnExpressionManager;
 import org.flowable.cmmn.spring.SpringCmmnEngineConfiguration;
-import org.flowable.cmmn.spring.SpringCmmnExpressionManager;
 import org.flowable.cmmn.spring.configurator.SpringCmmnEngineConfigurator;
+import org.flowable.common.engine.api.scope.ScopeTypes;
 import org.flowable.common.engine.impl.cfg.SpringBeanFactoryProxyMap;
+import org.flowable.common.engine.impl.el.DefaultExpressionManager;
 import org.flowable.common.engine.impl.interceptor.EngineConfigurationConstants;
 import org.flowable.content.engine.ContentEngine;
 import org.flowable.content.spring.SpringContentEngineConfiguration;
 import org.flowable.content.spring.configurator.SpringContentEngineConfigurator;
 import org.flowable.dmn.engine.DmnEngine;
 import org.flowable.dmn.spring.SpringDmnEngineConfiguration;
-import org.flowable.dmn.spring.SpringDmnExpressionManager;
 import org.flowable.dmn.spring.configurator.SpringDmnEngineConfigurator;
 import org.flowable.engine.ProcessEngine;
 import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
+import org.flowable.engine.impl.el.ProcessExpressionManager;
 import org.flowable.engine.spring.configurator.SpringProcessEngineConfigurator;
 import org.flowable.eventregistry.impl.EventRegistryEngine;
 import org.flowable.eventregistry.spring.SpringEventRegistryEngineConfiguration;
 import org.flowable.eventregistry.spring.configurator.SpringEventRegistryConfigurator;
 import org.flowable.form.engine.FormEngine;
 import org.flowable.form.spring.SpringFormEngineConfiguration;
-import org.flowable.form.spring.SpringFormExpressionManager;
 import org.flowable.form.spring.configurator.SpringFormEngineConfigurator;
 import org.flowable.idm.engine.IdmEngine;
 import org.flowable.idm.spring.SpringIdmEngineConfiguration;
 import org.flowable.idm.spring.configurator.SpringIdmEngineConfigurator;
-import org.flowable.spring.SpringExpressionManager;
 import org.flowable.spring.SpringProcessEngineConfiguration;
 import org.flowable.spring.boot.ProcessEngineAutoConfiguration;
 import org.flowable.spring.boot.ProcessEngineServicesAutoConfiguration;
@@ -74,7 +73,7 @@ import org.flowable.spring.boot.idm.IdmEngineAutoConfiguration;
 import org.flowable.spring.boot.idm.IdmEngineServicesAutoConfiguration;
 import org.flowable.task.api.Task;
 import org.flowable.test.spring.boot.util.CustomUserEngineConfigurerConfiguration;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration;
@@ -150,13 +149,21 @@ public class AllEnginesAutoConfigurationTest {
                     .as("AppEngine configurations")
                     .containsOnly(
                             entry(EngineConfigurationConstants.KEY_APP_ENGINE_CONFIG, appEngineConfiguration),
+                            entry(ScopeTypes.APP, appEngineConfiguration),
                             entry(EngineConfigurationConstants.KEY_CMMN_ENGINE_CONFIG, cmmnEngineConfiguration),
+                            entry(ScopeTypes.CMMN, cmmnEngineConfiguration),
                             entry(EngineConfigurationConstants.KEY_DMN_ENGINE_CONFIG, dmnEngineConfiguration),
+                            entry(ScopeTypes.DMN, dmnEngineConfiguration),
                             entry(EngineConfigurationConstants.KEY_CONTENT_ENGINE_CONFIG, contentEngineConfiguration),
+                            entry("content", contentEngineConfiguration),
                             entry(EngineConfigurationConstants.KEY_FORM_ENGINE_CONFIG, formEngineConfiguration),
+                            entry(ScopeTypes.FORM, formEngineConfiguration),
                             entry(EngineConfigurationConstants.KEY_IDM_ENGINE_CONFIG, idmEngineConfiguration),
+                            entry("idm", idmEngineConfiguration),
                             entry(EngineConfigurationConstants.KEY_EVENT_REGISTRY_CONFIG, eventEngineConfiguration),
-                            entry(EngineConfigurationConstants.KEY_PROCESS_ENGINE_CONFIG, processEngineConfiguration)
+                            entry(ScopeTypes.EVENT_REGISTRY, eventEngineConfiguration),
+                            entry(EngineConfigurationConstants.KEY_PROCESS_ENGINE_CONFIG, processEngineConfiguration),
+                            entry(ScopeTypes.BPMN, processEngineConfiguration)
                     )
                     .containsAllEntriesOf(cmmnEngineConfiguration.getEngineConfigurations())
                     .containsAllEntriesOf(dmnEngineConfiguration.getEngineConfigurations())
@@ -193,16 +200,28 @@ public class AllEnginesAutoConfigurationTest {
                     .as("AppEngineConfiguration idmEngineConfigurator")
                     .isSameAs(idmConfigurator);
 
-            assertThat(appEngineConfiguration.getExpressionManager()).isInstanceOf(SpringAppExpressionManager.class);
-            assertThat(appEngineConfiguration.getExpressionManager().getBeans()).isNull();
-            assertThat(processEngineConfiguration.getExpressionManager()).isInstanceOf(SpringExpressionManager.class);
+            assertThat(appEngineConfiguration.getExpressionManager()).isInstanceOf(DefaultExpressionManager.class);
+            assertThat(appEngineConfiguration.getExpressionManager().getBeans()).isInstanceOf(SpringBeanFactoryProxyMap.class);
+            assertThat(processEngineConfiguration.getExpressionManager()).isNotEqualTo(appEngineConfiguration.getExpressionManager());
+            assertThat(processEngineConfiguration.getExpressionManager()).isInstanceOf(ProcessExpressionManager.class);
             assertThat(processEngineConfiguration.getExpressionManager().getBeans()).isInstanceOf(SpringBeanFactoryProxyMap.class);
-            assertThat(cmmnEngineConfiguration.getExpressionManager()).isInstanceOf(SpringCmmnExpressionManager.class);
+            assertThat(cmmnEngineConfiguration.getExpressionManager()).isNotEqualTo(appEngineConfiguration.getExpressionManager());
+            assertThat(cmmnEngineConfiguration.getExpressionManager()).isInstanceOf(CmmnExpressionManager.class);
             assertThat(cmmnEngineConfiguration.getExpressionManager().getBeans()).isInstanceOf(SpringBeanFactoryProxyMap.class);
-            assertThat(dmnEngineConfiguration.getExpressionManager()).isInstanceOf(SpringDmnExpressionManager.class);
+            assertThat(dmnEngineConfiguration.getExpressionManager()).isNotEqualTo(appEngineConfiguration.getExpressionManager());
+            assertThat(dmnEngineConfiguration.getExpressionManager()).isInstanceOf(DefaultExpressionManager.class);
             assertThat(dmnEngineConfiguration.getExpressionManager().getBeans()).isInstanceOf(SpringBeanFactoryProxyMap.class);
-            assertThat(formEngineConfiguration.getExpressionManager()).isInstanceOf(SpringFormExpressionManager.class);
+            assertThat(formEngineConfiguration.getExpressionManager()).isNotEqualTo(appEngineConfiguration.getExpressionManager());
+            assertThat(formEngineConfiguration.getExpressionManager()).isInstanceOf(DefaultExpressionManager.class);
             assertThat(formEngineConfiguration.getExpressionManager().getBeans()).isInstanceOf(SpringBeanFactoryProxyMap.class);
+
+            assertThat(cmmnEngineConfiguration.isDisableEventRegistry()).isTrue();
+            assertThat(cmmnEngineConfiguration.getEventRegistryConfigurator()).isNull();
+            assertThat(processEngineConfiguration.isDisableEventRegistry()).isTrue();
+            assertThat(processEngineConfiguration.getEventRegistryConfigurator()).isNull();
+            assertThat(appEngineConfiguration.getEventRegistryConfigurator())
+                    .as("AppEngineConfiguration eventEngineConfiguration")
+                    .isSameAs(eventConfigurator);
 
             deleteDeployments(context.getBean(AppEngine.class));
             deleteDeployments(context.getBean(CmmnEngine.class));
@@ -225,8 +244,8 @@ public class AllEnginesAutoConfigurationTest {
             TaskService taskService = processEngineConfiguration.getTaskService();
 
             CaseInstance caseInstance = cmmnRuntimeService.createCaseInstanceBuilder().caseDefinitionKey("myCase").start();
-            assertThat(cmmnHistoryService.createHistoricMilestoneInstanceQuery().count()).isEqualTo(0);
-            assertThat(runtimeService.createProcessInstanceQuery().count()).isEqualTo(0);
+            assertThat(cmmnHistoryService.createHistoricMilestoneInstanceQuery().count()).isZero();
+            assertThat(runtimeService.createProcessInstanceQuery().count()).isZero();
 
             List<PlanItemInstance> planItemInstances = cmmnRuntimeService.createPlanItemInstanceQuery()
                     .caseInstanceId(caseInstance.getId())
@@ -243,8 +262,8 @@ public class AllEnginesAutoConfigurationTest {
             taskService.complete(tasks.get(0).getId());
             taskService.complete(tasks.get(1).getId());
 
-            assertThat(taskService.createTaskQuery().count()).isEqualTo(0);
-            assertThat(runtimeService.createProcessInstanceQuery().count()).isEqualTo(0);
+            assertThat(taskService.createTaskQuery().count()).isZero();
+            assertThat(runtimeService.createProcessInstanceQuery().count()).isZero();
 
             planItemInstances = cmmnRuntimeService.createPlanItemInstanceQuery()
                     .caseInstanceId(caseInstance.getId())

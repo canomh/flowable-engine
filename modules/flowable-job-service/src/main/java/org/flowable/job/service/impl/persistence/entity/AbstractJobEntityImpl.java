@@ -18,6 +18,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.commons.lang3.StringUtils;
+import org.flowable.common.engine.api.scope.ScopeTypes;
+import org.flowable.common.engine.impl.persistence.entity.ByteArrayRef;
 import org.flowable.job.api.JobInfo;
 import org.flowable.job.service.JobServiceConfiguration;
 
@@ -47,6 +49,7 @@ public abstract class AbstractJobEntityImpl extends AbstractJobServiceEntity imp
     protected String subScopeId;
     protected String scopeType;
     protected String scopeDefinitionId;
+    protected String correlationId;
 
     protected boolean isExclusive = DEFAULT_EXCLUSIVE;
 
@@ -58,9 +61,9 @@ public abstract class AbstractJobEntityImpl extends AbstractJobServiceEntity imp
 
     protected String jobHandlerType;
     protected String jobHandlerConfiguration;
-    protected JobByteArrayRef customValuesByteArrayRef;
+    protected ByteArrayRef customValuesByteArrayRef;
 
-    protected JobByteArrayRef exceptionByteArrayRef;
+    protected ByteArrayRef exceptionByteArrayRef;
     protected String exceptionMessage;
 
     protected String tenantId = JobServiceConfiguration.NO_TENANT_ID;
@@ -78,12 +81,13 @@ public abstract class AbstractJobEntityImpl extends AbstractJobServiceEntity imp
         persistentState.put("jobType", jobType);
         persistentState.put("elementId", elementId);
         persistentState.put("elementName", elementName);
-        
+        persistentState.put("correlationId", correlationId);
+
         if (customValuesByteArrayRef != null) {
             persistentState.put("customValuesByteArrayRef", customValuesByteArrayRef);
         }
 
-        if (exceptionByteArrayRef != null) {
+        if (exceptionByteArrayRef != null && exceptionByteArrayRef.getId() != null) {
             persistentState.put("exceptionByteArrayRef", exceptionByteArrayRef);
         }
 
@@ -221,6 +225,16 @@ public abstract class AbstractJobEntityImpl extends AbstractJobServiceEntity imp
     public void setScopeDefinitionId(String scopeDefinitionId) {
         this.scopeDefinitionId = scopeDefinitionId;
     }
+
+    @Override
+    public String getCorrelationId() {
+        return correlationId;
+    }
+
+    @Override
+    public void setCorrelationId(String correlationId) {
+        this.correlationId = correlationId;
+    }
     
     @Override
     public String getCategory() {
@@ -293,8 +307,13 @@ public abstract class AbstractJobEntityImpl extends AbstractJobServiceEntity imp
     }
 
     @Override
-    public JobByteArrayRef getCustomValuesByteArrayRef() {
+    public ByteArrayRef getCustomValuesByteArrayRef() {
         return customValuesByteArrayRef;
+    }
+
+    @Override
+    public void setCustomValuesByteArrayRef(ByteArrayRef customValuesByteArrayRef) {
+        this.customValuesByteArrayRef = customValuesByteArrayRef;
     }
 
     @Override
@@ -304,10 +323,10 @@ public abstract class AbstractJobEntityImpl extends AbstractJobServiceEntity imp
 
     @Override
     public void setCustomValues(String customValues) {
-        if(customValuesByteArrayRef == null) {
-            customValuesByteArrayRef = new JobByteArrayRef();
+        if (customValuesByteArrayRef == null) {
+            customValuesByteArrayRef = new ByteArrayRef();
         }
-        customValuesByteArrayRef.setValue("jobCustomValues", customValues);
+        customValuesByteArrayRef.setValue("jobCustomValues", customValues, getEngineType());
     }
 
     @Override
@@ -328,10 +347,10 @@ public abstract class AbstractJobEntityImpl extends AbstractJobServiceEntity imp
     @Override
     public void setExceptionStacktrace(String exception) {
         if (exceptionByteArrayRef == null) {
-            exceptionByteArrayRef = new JobByteArrayRef();
+            exceptionByteArrayRef = new ByteArrayRef();
         }
 
-        exceptionByteArrayRef.setValue("stacktrace", exception);
+        exceptionByteArrayRef.setValue("stacktrace", exception, getEngineType());
     }
 
     @Override
@@ -345,17 +364,30 @@ public abstract class AbstractJobEntityImpl extends AbstractJobServiceEntity imp
     }
 
     @Override
-    public JobByteArrayRef getExceptionByteArrayRef() {
+    public ByteArrayRef getExceptionByteArrayRef() {
         return exceptionByteArrayRef;
     }
 
-    private String getJobByteArrayRefAsString(JobByteArrayRef jobByteArrayRef) {
+    @Override
+    public void setExceptionByteArrayRef(ByteArrayRef exceptionByteArrayRef) {
+        this.exceptionByteArrayRef = exceptionByteArrayRef;
+    }
+
+    private String getJobByteArrayRefAsString(ByteArrayRef jobByteArrayRef) {
         if (jobByteArrayRef == null) {
             return null;
         }
-        return jobByteArrayRef.asString();
+        return jobByteArrayRef.asString(getEngineType());
     }
 
+    protected String getEngineType() {
+        if (StringUtils.isNotEmpty(scopeType)) {
+            return scopeType;
+        } else {
+            return ScopeTypes.BPMN;
+        }
+    }
+    
     @Override
     public String toString() {
         return getClass().getName() + " [id=" + id + "]";

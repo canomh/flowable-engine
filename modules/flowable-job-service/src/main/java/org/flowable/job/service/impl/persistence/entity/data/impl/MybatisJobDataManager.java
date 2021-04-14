@@ -18,8 +18,10 @@ import java.util.List;
 import java.util.Map;
 
 import org.flowable.common.engine.impl.Page;
+import org.flowable.common.engine.impl.cfg.IdGenerator;
 import org.flowable.common.engine.impl.db.AbstractDataManager;
 import org.flowable.common.engine.impl.db.DbSqlSession;
+import org.flowable.common.engine.impl.db.SingleCachedEntityMatcher;
 import org.flowable.common.engine.impl.persistence.cache.CachedEntityMatcher;
 import org.flowable.job.api.Job;
 import org.flowable.job.service.JobServiceConfiguration;
@@ -27,6 +29,7 @@ import org.flowable.job.service.impl.JobQueryImpl;
 import org.flowable.job.service.impl.persistence.entity.JobEntity;
 import org.flowable.job.service.impl.persistence.entity.JobEntityImpl;
 import org.flowable.job.service.impl.persistence.entity.data.JobDataManager;
+import org.flowable.job.service.impl.persistence.entity.data.impl.cachematcher.JobByCorrelationIdMatcher;
 import org.flowable.job.service.impl.persistence.entity.data.impl.cachematcher.JobsByExecutionIdMatcher;
 
 /**
@@ -38,11 +41,8 @@ public class MybatisJobDataManager extends AbstractDataManager<JobEntity> implem
     protected JobServiceConfiguration jobServiceConfiguration;
 
     protected CachedEntityMatcher<JobEntity> jobsByExecutionIdMatcher = new JobsByExecutionIdMatcher();
-    
-    public MybatisJobDataManager() {
-        
-    }
-    
+    protected SingleCachedEntityMatcher<JobEntity> jobByCorrelationIdMatcher = new JobByCorrelationIdMatcher<>();
+
     public MybatisJobDataManager(JobServiceConfiguration jobServiceConfiguration) {
         this.jobServiceConfiguration = jobServiceConfiguration;
     }
@@ -88,6 +88,11 @@ public class MybatisJobDataManager extends AbstractDataManager<JobEntity> implem
     }
 
     @Override
+    public JobEntity findJobByCorrelationId(String correlationId) {
+        return getEntity("selectJobByCorrelationId", correlationId, jobByCorrelationIdMatcher, true);
+    }
+
+    @Override
     @SuppressWarnings("unchecked")
     public List<JobEntity> findExpiredJobs(List<String> enabledCategories, Page page) {
         Map<String, Object> params = new HashMap<>();
@@ -124,6 +129,15 @@ public class MybatisJobDataManager extends AbstractDataManager<JobEntity> implem
     }
 
     @Override
+    public void bulkUpdateJobLockWithoutRevisionCheck(List<JobEntity> jobEntities, String lockOwner, Date lockExpirationTime) {
+        Map<String, Object> params = new HashMap<>(3);
+        params.put("lockOwner", lockOwner);
+        params.put("lockExpirationTime", lockExpirationTime);
+
+        bulkUpdateEntities("updateJobLocks", params, "jobs", jobEntities);
+    }
+
+    @Override
     public void resetExpiredJob(String jobId) {
         Map<String, Object> params = new HashMap<>(2);
         params.put("id", jobId);
@@ -141,4 +155,8 @@ public class MybatisJobDataManager extends AbstractDataManager<JobEntity> implem
         }
     }
 
+    @Override
+    protected IdGenerator getIdGenerator() {
+        return jobServiceConfiguration.getIdGenerator();
+    }
 }

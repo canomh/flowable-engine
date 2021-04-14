@@ -19,7 +19,6 @@ import java.util.List;
 
 import org.flowable.common.engine.api.delegate.event.FlowableEngineEventType;
 import org.flowable.common.engine.api.delegate.event.FlowableEventDispatcher;
-import org.flowable.common.engine.impl.Page;
 import org.flowable.common.engine.impl.calendar.BusinessCalendar;
 import org.flowable.job.api.Job;
 import org.flowable.job.service.JobServiceConfiguration;
@@ -34,7 +33,7 @@ import org.slf4j.LoggerFactory;
  * @author Tijs Rademakers
  */
 public class TimerJobEntityManagerImpl
-    extends AbstractJobServiceEngineEntityManager<TimerJobEntity, TimerJobDataManager>
+    extends JobInfoEntityManagerImpl<TimerJobEntity, TimerJobDataManager>
     implements TimerJobEntityManager {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(TimerJobEntityManagerImpl.class);
@@ -61,8 +60,8 @@ public class TimerJobEntityManagerImpl
     }
 
     @Override
-    public List<TimerJobEntity> findTimerJobsToExecute(List<String> enabledCategories, Page page) {
-        return dataManager.findTimerJobsToExecute(enabledCategories, page);
+    public TimerJobEntity findJobByCorrelationId(String correlationId) {
+        return dataManager.findJobByCorrelationId(correlationId);
     }
 
     @Override
@@ -134,28 +133,53 @@ public class TimerJobEntityManagerImpl
         }
 
         jobEntity.setCreateTime(getClock().getCurrentTime());
+        if (jobEntity.getCorrelationId() == null) {
+            jobEntity.setCorrelationId(serviceConfiguration.getIdGenerator().getNextId());
+        }
         super.insert(jobEntity, fireCreateEvent);
         return true;
     }
 
     @Override
     public void delete(TimerJobEntity jobEntity) {
-        super.delete(jobEntity, false);
+        delete(jobEntity, false);
 
         deleteByteArrayRef(jobEntity.getExceptionByteArrayRef());
         deleteByteArrayRef(jobEntity.getCustomValuesByteArrayRef());
 
+        // Send event
+        FlowableEventDispatcher eventDispatcher = getEventDispatcher();
+        if (eventDispatcher != null && eventDispatcher.isEnabled()) {
+            eventDispatcher.dispatchEvent(FlowableJobEventBuilder.createEntityEvent(FlowableEngineEventType.ENTITY_DELETED, jobEntity),
+                    serviceConfiguration.getEngineName());
+        }
+    }
+
+    @Override
+    public void delete(TimerJobEntity jobEntity, boolean fireDeleteEvent) {
         if (serviceConfiguration.getInternalJobManager() != null) {
             serviceConfiguration.getInternalJobManager().handleJobDelete(jobEntity);
         }
 
-        // Send event
-        FlowableEventDispatcher eventDispatcher = getEventDispatcher();
-        if (eventDispatcher != null && eventDispatcher.isEnabled()) {
-            eventDispatcher.dispatchEvent(FlowableJobEventBuilder.createEntityEvent(FlowableEngineEventType.ENTITY_DELETED, jobEntity));
-        }
+        super.delete(jobEntity, fireDeleteEvent);
     }
-    
+
+    @Override
+    public void bulkUpdateJobLockWithoutRevisionCheck(List<TimerJobEntity> timerJobEntities, String lockOwner, Date lockExpirationTime) {
+        dataManager.bulkUpdateJobLockWithoutRevisionCheck(timerJobEntities, lockOwner, lockExpirationTime);
+    }
+
+    @Override
+    public void bulkDeleteTimerJobsWithoutRevisionCheck(List<TimerJobEntity> timerJobEntities) {
+        for (TimerJobEntity timerJobEntity : timerJobEntities) {
+            if (serviceConfiguration.getInternalJobManager() != null) {
+                serviceConfiguration.getInternalJobManager().handleJobDelete(timerJobEntity);
+            }
+        }
+
+        dataManager.bulkDeleteWithoutRevision(timerJobEntities);
+    }
+
     protected TimerJobEntity createTimer(JobEntity te) {
         TimerJobEntity newTimerEntity = create();
         newTimerEntity.setJobHandlerConfiguration(te.getJobHandlerConfiguration());

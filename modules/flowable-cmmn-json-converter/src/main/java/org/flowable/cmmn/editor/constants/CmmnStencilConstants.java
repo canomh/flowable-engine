@@ -29,6 +29,7 @@ public interface CmmnStencilConstants {
     String STENCIL_TASK_HTTP = "HttpTask";
     String STENCIL_TASK_MAIL = "MailTask";
     String STENCIL_TASK_SEND_EVENT = "SendEventTask";
+    String STENCIL_TASK_EXTERNAL_WORKER = "ExternalWorkerTask";
     String STENCIL_TASK_CASE = "CaseTask";
     String STENCIL_TASK_PROCESS = "ProcessTask";
     String STENCIL_TASK_SCRIPT = "ScriptTask";
@@ -81,7 +82,8 @@ public interface CmmnStencilConstants {
     String PROPERTY_REPETITION_ENABLED = "repetitionenabled";
     String PROPERTY_REPETITION_RULE_CONDITION = "repetitionrulecondition";
     String PROPERTY_REPETITION_RULE_VARIABLE_NAME = "repetitioncountervariablename";
-    
+    String PROPERTY_REPETITION_VARIABLE_AGGREGATIONS = "repetition_variableaggregations";
+
     String PROPERTY_MANUAL_ACTIVATION_ENABLED = "manualactivationenabled";
     String PROPERTY_MANUAL_ACTIVATION_RULE_CONDITION = "manualactivationrulecondition";
     
@@ -99,6 +101,7 @@ public interface CmmnStencilConstants {
     String PROPERTY_USERTASK_CANDIDATE_USERS = "candidateUsers";
     String PROPERTY_USERTASK_CANDIDATE_GROUPS = "candidateGroups";
     String PROPERTY_USERTASK_CATEGORY = "categorydefinition";
+    String PROPERTY_USERTASK_TASK_ID_VARIABLE_NAME = "taskidvariablename";
 
     String PROPERTY_USERTASK_LISTENERS = "tasklisteners";
     String PROPERTY_LISTENER_EVENT = "event";
@@ -131,6 +134,7 @@ public interface CmmnStencilConstants {
     String PROPERTY_SCRIPT_TASK_SCRIPT_TEXT = "scripttext";
 
     String PROPERTY_DECISIONTABLE_REFERENCE = "decisiontaskdecisiontablereference";
+    String PROPERTY_DECISIONSERVICE_REFERENCE = "decisiontaskdecisionservicereference";
     String PROPERTY_DECISIONTABLE_REFERENCE_ID = "decisiontablereferenceid";
     String PROPERTY_DECISIONTABLE_REFERENCE_NAME = "decisiontablereferencename";
     String PROPERTY_DECISIONTABLE_REFERENCE_KEY = "decisionTableReferenceKey";
@@ -138,6 +142,7 @@ public interface CmmnStencilConstants {
     String PROPERTY_DECISIONTABLE_THROW_ERROR_NO_HITS_KEY = "decisionTaskThrowErrorOnNoHits";
     String PROPERTY_DECISIONTABLE_FALLBACK_TO_DEFAULT_TENANT = "decisiontaskfallbacktodefaulttenant";
     String PROPERTY_DECISIONTABLE_FALLBACK_TO_DEFAULT_TENANT_KEY = "fallbackToDefaultTenant";
+    String PROPERTY_DECISION_REFERENCE_TYPE = "decisionReferenceType";
 
     String PROPERTY_CASE_REFERENCE = "casetaskcasereference";
     String PROPERTY_CASE_IN_PARAMETERS = "casetaskinparameters";
@@ -176,6 +181,7 @@ public interface CmmnStencilConstants {
     String PROPERTY_HTTPTASK_RESULT_VARIABLE_PREFIX = "httptaskresultvariableprefix";
     String PROPERTY_HTTPTASK_SAVE_RESPONSE_TRANSIENT = "httptasksaveresponseparameterstransient";
     String PROPERTY_HTTPTASK_SAVE_RESPONSE_AS_JSON = "httptasksaveresponseasjson";
+    String PROPERTY_HTTPTASK_PARALLEL_IN_SAME_TRANSACTION = "httptaskparallelinsametransaction";
 
     String PROPERTY_MAILTASK_HEADERS = "mailtaskheaders";
     String PROPERTY_MAILTASK_TO = "mailtaskto";
@@ -197,6 +203,8 @@ public interface CmmnStencilConstants {
 
     String PROPERTY_EVENT_TYPE = "eventType";
     
+    String PROPERTY_EXTERNAL_WORKER_JOB_TOPIC = "topic";
+
     String PROPERTY_EVENT_REGISTRY_EVENT_KEY = "eventkey";
     String PROPERTY_EVENT_REGISTRY_EVENT_NAME = "eventname";
     String PROPERTY_EVENT_REGISTRY_IN_PARAMETERS = "eventinparameters";

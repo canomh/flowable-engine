@@ -13,6 +13,7 @@
 
 package org.flowable.job.service.impl.persistence.entity;
 
+import java.util.Date;
 import java.util.List;
 
 import org.flowable.common.engine.impl.Page;
@@ -29,7 +30,7 @@ public abstract class JobInfoEntityManagerImpl<T extends JobInfoEntity, DM exten
     implements JobInfoEntityManager<T> {
 
     public JobInfoEntityManagerImpl(JobServiceConfiguration jobServiceConfiguration, DM jobDataManager) {
-        super(jobServiceConfiguration, jobDataManager);
+        super(jobServiceConfiguration, jobServiceConfiguration.getEngineName(), jobDataManager);
     }
 
     @Override
@@ -55,6 +56,11 @@ public abstract class JobInfoEntityManagerImpl<T extends JobInfoEntity, DM exten
     @Override
     public void resetExpiredJob(String jobId) {
         dataManager.resetExpiredJob(jobId);
+    }
+
+    @Override
+    public void bulkUpdateJobLockWithoutRevisionCheck(List<T> jobEntities, String lockOwner, Date lockExpirationTime) {
+        dataManager.bulkUpdateJobLockWithoutRevisionCheck(jobEntities, lockOwner, lockExpirationTime);
     }
 
     @Override

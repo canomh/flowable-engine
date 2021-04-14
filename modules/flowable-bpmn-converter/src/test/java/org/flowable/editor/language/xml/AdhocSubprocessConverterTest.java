@@ -12,39 +12,21 @@
  */
 package org.flowable.editor.language.xml;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import org.flowable.bpmn.model.AdhocSubProcess;
 import org.flowable.bpmn.model.BpmnModel;
 import org.flowable.bpmn.model.FlowElement;
-import org.junit.Test;
+import org.flowable.editor.language.xml.util.BpmnXmlConverterTest;
 
-public class AdhocSubprocessConverterTest extends AbstractConverterTest {
+class AdhocSubprocessConverterTest {
 
-    @Test
-    public void convertXMLToModel() throws Exception {
-        BpmnModel bpmnModel = readXMLFile();
-        validateModel(bpmnModel);
-    }
-
-    @Test
-    public void convertModelToXML() throws Exception {
-        BpmnModel bpmnModel = readXMLFile();
-        BpmnModel parsedModel = exportAndReadXMLFile(bpmnModel);
-        validateModel(parsedModel);
-    }
-
-    @Override
-    protected String getResource() {
-        return "adhocsubprocess.bpmn";
-    }
-
-    private void validateModel(BpmnModel model) {
+    @BpmnXmlConverterTest("adhocsubprocess.bpmn")
+    void validateModel(BpmnModel model) {
         FlowElement flowElement = model.getMainProcess().getFlowElement("adhocSubProcess");
-        assertNotNull(flowElement);
+        assertThat(flowElement).isNotNull();
 
         AdhocSubProcess adhocSubProcess = (AdhocSubProcess) flowElement;
-        assertEquals("${completed}", adhocSubProcess.getCompletionCondition());
+        assertThat(adhocSubProcess.getCompletionCondition()).isEqualTo("${completed}");
     }
 }

@@ -47,11 +47,33 @@ import org.apache.ibatis.session.defaults.DefaultSqlSessionFactory;
 import org.apache.ibatis.transaction.TransactionFactory;
 import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
 import org.apache.ibatis.transaction.managed.ManagedTransactionFactory;
+import org.apache.ibatis.type.ArrayTypeHandler;
+import org.apache.ibatis.type.BigDecimalTypeHandler;
+import org.apache.ibatis.type.BlobByteObjectArrayTypeHandler;
+import org.apache.ibatis.type.BlobInputStreamTypeHandler;
+import org.apache.ibatis.type.BooleanTypeHandler;
+import org.apache.ibatis.type.ByteTypeHandler;
+import org.apache.ibatis.type.ClobTypeHandler;
+import org.apache.ibatis.type.DateOnlyTypeHandler;
+import org.apache.ibatis.type.DateTypeHandler;
+import org.apache.ibatis.type.DoubleTypeHandler;
+import org.apache.ibatis.type.FloatTypeHandler;
+import org.apache.ibatis.type.IntegerTypeHandler;
+import org.apache.ibatis.type.JdbcType;
+import org.apache.ibatis.type.LongTypeHandler;
+import org.apache.ibatis.type.NClobTypeHandler;
+import org.apache.ibatis.type.NStringTypeHandler;
+import org.apache.ibatis.type.ShortTypeHandler;
+import org.apache.ibatis.type.SqlxmlTypeHandler;
+import org.apache.ibatis.type.StringTypeHandler;
+import org.apache.ibatis.type.TimeOnlyTypeHandler;
+import org.apache.ibatis.type.TypeHandlerRegistry;
 import org.flowable.common.engine.api.FlowableException;
 import org.flowable.common.engine.api.delegate.event.FlowableEngineEventType;
 import org.flowable.common.engine.api.delegate.event.FlowableEventDispatcher;
 import org.flowable.common.engine.api.delegate.event.FlowableEventListener;
 import org.flowable.common.engine.api.engine.EngineLifecycleListener;
+import org.flowable.common.engine.impl.agenda.AgendaOperationRunner;
 import org.flowable.common.engine.impl.cfg.CommandExecutorImpl;
 import org.flowable.common.engine.impl.cfg.IdGenerator;
 import org.flowable.common.engine.impl.cfg.TransactionContextFactory;
@@ -84,10 +106,16 @@ import org.flowable.common.engine.impl.persistence.GenericManagerFactory;
 import org.flowable.common.engine.impl.persistence.StrongUuidGenerator;
 import org.flowable.common.engine.impl.persistence.cache.EntityCache;
 import org.flowable.common.engine.impl.persistence.cache.EntityCacheImpl;
+import org.flowable.common.engine.impl.persistence.entity.ByteArrayEntityManager;
+import org.flowable.common.engine.impl.persistence.entity.ByteArrayEntityManagerImpl;
 import org.flowable.common.engine.impl.persistence.entity.Entity;
 import org.flowable.common.engine.impl.persistence.entity.PropertyEntityManager;
 import org.flowable.common.engine.impl.persistence.entity.PropertyEntityManagerImpl;
+import org.flowable.common.engine.impl.persistence.entity.TableDataManager;
+import org.flowable.common.engine.impl.persistence.entity.TableDataManagerImpl;
+import org.flowable.common.engine.impl.persistence.entity.data.ByteArrayDataManager;
 import org.flowable.common.engine.impl.persistence.entity.data.PropertyDataManager;
+import org.flowable.common.engine.impl.persistence.entity.data.impl.MybatisByteArrayDataManager;
 import org.flowable.common.engine.impl.persistence.entity.data.impl.MybatisPropertyDataManager;
 import org.flowable.common.engine.impl.runtime.Clock;
 import org.flowable.common.engine.impl.service.CommonEngineServiceImpl;
@@ -163,6 +191,8 @@ public abstract class AbstractEngineConfiguration {
     protected CommandContextFactory commandContextFactory;
     protected CommandInterceptor commandInvoker;
 
+    protected AgendaOperationRunner agendaOperationRunner = (commandContext, runnable) -> runnable.run();
+
     protected List<CommandInterceptor> customPreCommandInterceptors;
     protected List<CommandInterceptor> customPostCommandInterceptors;
     protected List<CommandInterceptor> commandInterceptors;
@@ -199,11 +229,11 @@ public abstract class AbstractEngineConfiguration {
      * Some databases have a limit of how many parameters one sql insert can have (eg SQL Server, 2000 params (!= insert statements) ). Tweak this parameter in case of exceptions indicating too much
      * is being put into one bulk insert, or make it higher if your database can cope with it and there are inserts with a huge amount of data.
      * <p>
-     * By default: 100 (75 for mssql server as it has a hard limit of 2000 parameters in a statement)
+     * By default: 100 (55 for mssql server as it has a hard limit of 2000 parameters in a statement)
      */
     protected int maxNrOfStatementsInBulkInsert = 100;
 
-    public int DEFAULT_MAX_NR_OF_STATEMENTS_BULK_INSERT_SQL_SERVER = 60; // currently Execution has most params (31). 2000 / 31 = 64.
+    public int DEFAULT_MAX_NR_OF_STATEMENTS_BULK_INSERT_SQL_SERVER = 55; // currently Execution has most params (35). 2000 / 35 = 57.
 
     protected String mybatisMappingFile;
     protected Set<Class<?>> customMybatisMappers;
@@ -239,8 +269,8 @@ public abstract class AbstractEngineConfiguration {
     protected boolean usingRelationalDatabase = true;
     
     /**
-     * Flag that can be set to configure whether or not a schema is used. This is usefil for custom implementations that do not use relational databases at all.
-     * Setting {@link #usingRelationalDatabase} to true will automotically imply using a schema.
+     * Flag that can be set to configure whether or not a schema is used. This is useful for custom implementations that do not use relational databases at all.
+     * Setting {@link #usingRelationalDatabase} to true will automatically imply using a schema.
      */
     protected boolean usingSchemaMgmt = true;
 
@@ -248,7 +278,7 @@ public abstract class AbstractEngineConfiguration {
      * Allows configuring a database table prefix which is used for all runtime operations of the process engine. For example, if you specify a prefix named 'PRE1.', Flowable will query for executions
      * in a table named 'PRE1.ACT_RU_EXECUTION_'.
      *
-     * <p />
+     * <p>
      * <strong>NOTE: the prefix is not respected by automatic database schema management. If you use {@link AbstractEngineConfiguration#DB_SCHEMA_UPDATE_CREATE_DROP} or
      * {@link AbstractEngineConfiguration#DB_SCHEMA_UPDATE_TRUE}, Flowable will create the database tables using the default names, regardless of the prefix configured here.</strong>
      */
@@ -313,10 +343,13 @@ public abstract class AbstractEngineConfiguration {
     // DATA MANAGERS //////////////////////////////////////////////////////////////////
 
     protected PropertyDataManager propertyDataManager;
+    protected ByteArrayDataManager byteArrayDataManager;
+    protected TableDataManager tableDataManager;
 
     // ENTITY MANAGERS ////////////////////////////////////////////////////////////////
 
     protected PropertyEntityManager propertyEntityManager;
+    protected ByteArrayEntityManager byteArrayEntityManager;
 
     protected List<EngineDeployer> customPreDeployers;
     protected List<EngineDeployer> customPostDeployers;
@@ -395,7 +428,7 @@ public abstract class AbstractEngineConfiguration {
     protected int maxLengthStringVariableType = -1;
     
     protected void initEngineConfigurations() {
-        engineConfigurations.put(getEngineCfgKey(), this);
+        addEngineConfiguration(getEngineCfgKey(), getEngineScopeType(), this);
     }
 
     // DataSource
@@ -488,7 +521,7 @@ public abstract class AbstractEngineConfiguration {
             logger.debug("using database type: {}", databaseType);
 
         } catch (SQLException e) {
-            logger.error("Exception while initializing Database connection", e);
+            throw new RuntimeException("Exception while initializing Database connection", e);
         } finally {
             try {
                 if (connection != null) {
@@ -587,11 +620,10 @@ public abstract class AbstractEngineConfiguration {
 
             if (commandContextFactory != null) {
                 String engineCfgKey = getEngineCfgKey();
-                CommandContextInterceptor commandContextInterceptor = new CommandContextInterceptor(commandContextFactory);
+                CommandContextInterceptor commandContextInterceptor = new CommandContextInterceptor(commandContextFactory, 
+                        classLoader, useClassForNameClassLoading, clock, objectMapper);
                 engineConfigurations.put(engineCfgKey, this);
                 commandContextInterceptor.setEngineConfigurations(engineConfigurations);
-                commandContextInterceptor.setServiceConfigurations(serviceConfigurations);
-                commandContextInterceptor.setCurrentEngineConfigurationKey(engineCfgKey);
                 interceptors.add(commandContextInterceptor);
             }
 
@@ -610,6 +642,8 @@ public abstract class AbstractEngineConfiguration {
     }
 
     public abstract String getEngineCfgKey();
+    
+    public abstract String getEngineScopeType();
 
     public List<CommandInterceptor> getAdditionalDefaultCommandInterceptors() {
         return null;
@@ -660,7 +694,11 @@ public abstract class AbstractEngineConfiguration {
 
     public void initDataManagers() {
         if (propertyDataManager == null) {
-            propertyDataManager = new MybatisPropertyDataManager();
+            propertyDataManager = new MybatisPropertyDataManager(idGenerator);
+        }
+
+        if (byteArrayDataManager == null) {
+            byteArrayDataManager = new MybatisByteArrayDataManager(idGenerator);
         }
     }
 
@@ -669,6 +707,14 @@ public abstract class AbstractEngineConfiguration {
     public void initEntityManagers() {
         if (propertyEntityManager == null) {
             propertyEntityManager = new PropertyEntityManagerImpl(this, propertyDataManager);
+        }
+
+        if (byteArrayEntityManager == null) {
+            byteArrayEntityManager = new ByteArrayEntityManagerImpl(byteArrayDataManager, getEngineCfgKey(), this::getEventDispatcher);
+        }
+
+        if (tableDataManager == null) {
+            tableDataManager = new TableDataManagerImpl(this);
         }
     }
 
@@ -704,6 +750,11 @@ public abstract class AbstractEngineConfiguration {
             }
             
             commandContextFactory.setSessionFactories(sessionFactories);
+            
+        } else {
+            if (usingRelationalDatabase) {
+                initDbSqlSessionFactoryEntitySettings();
+            }
         }
 
         if (customSessionFactories != null) {
@@ -844,7 +895,49 @@ public abstract class AbstractEngineConfiguration {
     }
 
     public void initMybatisTypeHandlers(Configuration configuration) {
-        // To be extended
+        // When mapping into Map<String, Object> there is currently a problem with MyBatis.
+        // It will return objects which are driver specific.
+        // Therefore we are registering the mappings between Object.class and the specific jdbc type here.
+        // see https://github.com/mybatis/mybatis-3/issues/2216 for more info
+        TypeHandlerRegistry handlerRegistry = configuration.getTypeHandlerRegistry();
+
+        handlerRegistry.register(Object.class, JdbcType.BOOLEAN, new BooleanTypeHandler());
+        handlerRegistry.register(Object.class, JdbcType.BIT, new BooleanTypeHandler());
+
+        handlerRegistry.register(Object.class, JdbcType.TINYINT, new ByteTypeHandler());
+
+        handlerRegistry.register(Object.class, JdbcType.SMALLINT, new ShortTypeHandler());
+
+        handlerRegistry.register(Object.class, JdbcType.INTEGER, new IntegerTypeHandler());
+
+        handlerRegistry.register(Object.class, JdbcType.FLOAT, new FloatTypeHandler());
+
+        handlerRegistry.register(Object.class, JdbcType.DOUBLE, new DoubleTypeHandler());
+
+        handlerRegistry.register(Object.class, JdbcType.CHAR, new StringTypeHandler());
+        handlerRegistry.register(Object.class, JdbcType.CLOB, new ClobTypeHandler());
+        handlerRegistry.register(Object.class, JdbcType.VARCHAR, new StringTypeHandler());
+        handlerRegistry.register(Object.class, JdbcType.LONGVARCHAR, new StringTypeHandler());
+        handlerRegistry.register(Object.class, JdbcType.NVARCHAR, new NStringTypeHandler());
+        handlerRegistry.register(Object.class, JdbcType.NCHAR, new NStringTypeHandler());
+        handlerRegistry.register(Object.class, JdbcType.NCLOB, new NClobTypeHandler());
+
+        handlerRegistry.register(Object.class, JdbcType.ARRAY, new ArrayTypeHandler());
+
+        handlerRegistry.register(Object.class, JdbcType.BIGINT, new LongTypeHandler());
+
+        handlerRegistry.register(Object.class, JdbcType.REAL, new BigDecimalTypeHandler());
+        handlerRegistry.register(Object.class, JdbcType.DECIMAL, new BigDecimalTypeHandler());
+        handlerRegistry.register(Object.class, JdbcType.NUMERIC, new BigDecimalTypeHandler());
+
+        handlerRegistry.register(Object.class, JdbcType.BLOB, new BlobInputStreamTypeHandler());
+        handlerRegistry.register(Object.class, JdbcType.LONGVARCHAR, new BlobByteObjectArrayTypeHandler());
+
+        handlerRegistry.register(Object.class, JdbcType.DATE, new DateOnlyTypeHandler());
+        handlerRegistry.register(Object.class, JdbcType.TIME, new TimeOnlyTypeHandler());
+        handlerRegistry.register(Object.class, JdbcType.TIMESTAMP, new DateTypeHandler());
+
+        handlerRegistry.register(Object.class, JdbcType.SQLXML, new SqlxmlTypeHandler());
     }
 
     public void initCustomMybatisInterceptors(Configuration configuration) {
@@ -951,7 +1044,8 @@ public abstract class AbstractEngineConfiguration {
 
                 // Order them according to the priorities (useful for dependent
                 // configurator)
-                Collections.sort(allConfigurators, new Comparator<EngineConfigurator>() {
+                allConfigurators.sort(new Comparator<EngineConfigurator>() {
+
                     @Override
                     public int compare(EngineConfigurator configurator1, EngineConfigurator configurator2) {
                         int priority1 = configurator1.getPriority();
@@ -1008,7 +1102,7 @@ public abstract class AbstractEngineConfiguration {
     }
 
     public LockManager getLockManager(String lockName) {
-        return new LockManagerImpl(commandExecutor, lockName, getLockPollRate());
+        return new LockManagerImpl(commandExecutor, lockName, getLockPollRate(), getEngineCfgKey());
     }
 
     // getters and setters
@@ -1302,6 +1396,15 @@ public abstract class AbstractEngineConfiguration {
         return this;
     }
 
+    public AgendaOperationRunner getAgendaOperationRunner() {
+        return agendaOperationRunner;
+    }
+
+    public AbstractEngineConfiguration setAgendaOperationRunner(AgendaOperationRunner agendaOperationRunner) {
+        this.agendaOperationRunner = agendaOperationRunner;
+        return this;
+    }
+
     public List<CommandInterceptor> getCustomPreCommandInterceptors() {
         return customPreCommandInterceptors;
     }
@@ -1338,11 +1441,12 @@ public abstract class AbstractEngineConfiguration {
         return this;
     }
 
-    public void addEngineConfiguration(String key, AbstractEngineConfiguration engineConfiguration) {
+    public void addEngineConfiguration(String key, String scopeType, AbstractEngineConfiguration engineConfiguration) {
         if (engineConfigurations == null) {
             engineConfigurations = new HashMap<>();
         }
         engineConfigurations.put(key, engineConfiguration);
+        engineConfigurations.put(scopeType, engineConfiguration);
     }
 
     public Map<String, AbstractServiceConfiguration> getServiceConfigurations() {
@@ -1823,6 +1927,33 @@ public abstract class AbstractEngineConfiguration {
 
     public AbstractEngineConfiguration setPropertyEntityManager(PropertyEntityManager propertyEntityManager) {
         this.propertyEntityManager = propertyEntityManager;
+        return this;
+    }
+
+    public ByteArrayDataManager getByteArrayDataManager() {
+        return byteArrayDataManager;
+    }
+
+    public AbstractEngineConfiguration setByteArrayDataManager(ByteArrayDataManager byteArrayDataManager) {
+        this.byteArrayDataManager = byteArrayDataManager;
+        return this;
+    }
+
+    public ByteArrayEntityManager getByteArrayEntityManager() {
+        return byteArrayEntityManager;
+    }
+
+    public AbstractEngineConfiguration setByteArrayEntityManager(ByteArrayEntityManager byteArrayEntityManager) {
+        this.byteArrayEntityManager = byteArrayEntityManager;
+        return this;
+    }
+
+    public TableDataManager getTableDataManager() {
+        return tableDataManager;
+    }
+
+    public AbstractEngineConfiguration setTableDataManager(TableDataManager tableDataManager) {
+        this.tableDataManager = tableDataManager;
         return this;
     }
 

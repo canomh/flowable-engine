@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.flowable.common.engine.impl.Page;
+import org.flowable.common.engine.impl.cfg.IdGenerator;
 import org.flowable.common.engine.impl.db.AbstractDataManager;
 import org.flowable.common.engine.impl.db.ListQueryParameterObject;
 import org.flowable.job.api.HistoryJob;
@@ -33,10 +34,6 @@ import org.flowable.job.service.impl.persistence.entity.data.HistoryJobDataManag
 public class MybatisHistoryJobDataManager extends AbstractDataManager<HistoryJobEntity> implements HistoryJobDataManager {
 
     protected JobServiceConfiguration jobServiceConfiguration;
-    
-    public MybatisHistoryJobDataManager() {
-        
-    }
     
     public MybatisHistoryJobDataManager(JobServiceConfiguration jobServiceConfiguration) {
         this.jobServiceConfiguration = jobServiceConfiguration;
@@ -110,10 +107,24 @@ public class MybatisHistoryJobDataManager extends AbstractDataManager<HistoryJob
     }
 
     @Override
+    public void bulkUpdateJobLockWithoutRevisionCheck(List<HistoryJobEntity> historyJobs, String lockOwner, Date lockExpirationTime) {
+        Map<String, Object> params = new HashMap<>(3);
+        params.put("lockOwner", lockOwner);
+        params.put("lockExpirationTime", lockExpirationTime);
+
+        bulkUpdateEntities("updateHistoryJobLocks", params, "historyJobs", historyJobs);
+    }
+
+    @Override
     public void resetExpiredJob(String jobId) {
         Map<String, Object> params = new HashMap<>(2);
         params.put("id", jobId);
         getDbSqlSession().update("resetExpiredHistoryJob", params);
     }
 
+    @Override
+    protected IdGenerator getIdGenerator() {
+        return jobServiceConfiguration.getIdGenerator();
+    }
+    
 }

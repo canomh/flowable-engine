@@ -24,9 +24,17 @@ public interface Job extends JobInfo {
 
     String JOB_TYPE_TIMER = "timer";
     String JOB_TYPE_MESSAGE = "message";
+    String JOB_TYPE_EXTERNAL_WORKER = "externalWorker";
 
     boolean DEFAULT_EXCLUSIVE = true;
     int MAX_EXCEPTION_MESSAGE_LENGTH = 255;
+
+    /**
+     * Returns the correlation id of a job.
+     * The same job can be moved around and have its technical id changed.
+     * This id allows tracking that job.
+     */
+    String getCorrelationId();
 
     /**
      * Returns the date on which this job is supposed to be processed.

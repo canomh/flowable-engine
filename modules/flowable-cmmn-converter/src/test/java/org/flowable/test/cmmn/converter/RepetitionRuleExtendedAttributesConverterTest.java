@@ -13,7 +13,6 @@
 package org.flowable.test.cmmn.converter;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
 
 import java.util.List;
 import java.util.Map;
@@ -23,33 +22,18 @@ import org.flowable.cmmn.model.CaseElement;
 import org.flowable.cmmn.model.CmmnModel;
 import org.flowable.cmmn.model.PlanItem;
 import org.flowable.cmmn.model.RepetitionRule;
-import org.junit.Test;
+import org.flowable.test.cmmn.converter.util.CmmnXmlConverterTest;
 
 /**
  * Testing to read and write the extended repetition rule attributes.
  *
  * @author Micha Kiener
  */
-public class RepetitionRuleExtendedAttributesConverterTest extends AbstractConverterTest {
+public class RepetitionRuleExtendedAttributesConverterTest {
 
-    private static final String CMMN_RESOURCE = "org/flowable/test/cmmn/converter/repetitionRuleExtension.cmmn";
-
-    @Test
-    public void convertXMLToModel() throws Exception {
-        CmmnModel cmmnModel = readXMLFile(CMMN_RESOURCE);
-        validateModel(cmmnModel);
-    }
-
-    @Test
-    public void convertModelToXML() throws Exception {
-        CmmnModel cmmnModel = readXMLFile(CMMN_RESOURCE);
-        CmmnModel parsedModel = exportAndReadXMLFile(cmmnModel);
-        validateModel(parsedModel);
-    }
-
+    @CmmnXmlConverterTest("org/flowable/test/cmmn/converter/repetitionRuleExtension.cmmn")
     public void validateModel(CmmnModel cmmnModel) {
         assertThat(cmmnModel).isNotNull();
-        assertThat(cmmnModel.getCases()).isNotNull();
         assertThat(cmmnModel.getCases()).hasSize(1);
 
         Map<String, CaseElement> caseElements = cmmnModel.getCases().get(0).getAllCaseElements();
@@ -76,13 +60,9 @@ public class RepetitionRuleExtendedAttributesConverterTest extends AbstractConve
             .filter(caseElement -> caseElement instanceof PlanItem && planItemName.equals(caseElement.getName()))
             .collect(Collectors.toList());
 
-        if (planItems.size() == 0) {
-            fail("No plan item found with name " + planItemName);
-        }
+        assertThat(planItems).as("No plan item found with name " + planItemName).isNotEmpty();
 
-        if (planItems.size() > 1) {
-            fail("More than one plan item found with name " + planItemName + ", make sure it is unique for testing purposes");
-        }
+        assertThat(planItems).as("More than one plan item found with name " + planItemName + ", make sure it is unique for testing purposes").hasSize(1);
 
         RepetitionRule repetitionRule = ((PlanItem) planItems.get(0)).getItemControl().getRepetitionRule();
         assertThat(repetitionRule).as("no repetition rule found for plan item with name '" + planItemName + "'").isNotNull();

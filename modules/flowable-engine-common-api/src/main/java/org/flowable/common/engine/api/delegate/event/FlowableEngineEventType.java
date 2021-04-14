@@ -87,9 +87,19 @@ public enum FlowableEngineEventType implements FlowableEventType {
     JOB_RETRIES_DECREMENTED,
 
     /**
+     * A job has been rejected by the async executor. This most likely means the queue is full.
+     */
+    JOB_REJECTED,
+
+    /**
      * The job has been rescheduled.
      */
     JOB_RESCHEDULED,
+
+    /**
+     * A job has been moved to become a deadletter job. This typically means that the number of retries have been exhausted.
+     */
+    JOB_MOVED_TO_DEADLETTER,
 
     /**
      * An event type to be used by custom events. These types of events are never thrown by the engine itself, only be an external API call to dispatch an event.
@@ -329,7 +339,15 @@ public enum FlowableEngineEventType implements FlowableEventType {
      * 
      * Note that history (minimum level ACTIVITY) must be enabled to receive this event.
      */
-    HISTORIC_PROCESS_INSTANCE_ENDED;
+    HISTORIC_PROCESS_INSTANCE_ENDED,
+
+    /**
+     * A case instance has been started.
+     * Dispatched when starting a case instance previously created.
+     * The event is dispatched after the associated {@link #ENTITY_INITIALIZED} and the variables have been set.
+     */
+    CASE_STARTED,
+    ;
 
     public static final FlowableEngineEventType[] EMPTY_ARRAY = new FlowableEngineEventType[] {};
 

@@ -40,18 +40,9 @@ public interface AbstractRuntimeJobEntity extends Job, AbstractJobEntity {
 
     void setSubScopeId(String subScopeId);
 
-    /**
-     * Set the scope type for the job.
-     * The scope type is the type which is used by the job executor to pick
-     * the jobs for executing.
-     * <p>
-     * For example if the job should be picked up by the CMMN Job executor then it
-     * should have the same type as the CMMN job executor.
-     * @param scopeType the scope type for the job
-     */
-    void setScopeType(String scopeType);
-
     void setScopeDefinitionId(String scopeDefinitionId);
+
+    void setCorrelationId(String correlationId);
 
     void setDuedate(Date duedate);
 
@@ -69,6 +60,7 @@ public interface AbstractRuntimeJobEntity extends Job, AbstractJobEntity {
 
     void setMaxIterations(int maxIterations);
     
+    @Override
     void setCreateTime(Date createTime);
 
 }

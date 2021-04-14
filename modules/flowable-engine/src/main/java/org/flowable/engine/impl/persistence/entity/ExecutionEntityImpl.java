@@ -20,8 +20,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.commons.lang3.StringUtils;
+import org.flowable.bpmn.model.Activity;
+import org.flowable.bpmn.model.BoundaryEvent;
 import org.flowable.bpmn.model.FlowElement;
 import org.flowable.bpmn.model.FlowableListener;
+import org.flowable.bpmn.model.MultiInstanceLoopCharacteristics;
 import org.flowable.common.engine.api.FlowableException;
 import org.flowable.common.engine.impl.context.Context;
 import org.flowable.common.engine.impl.db.SuspensionState;
@@ -29,16 +33,18 @@ import org.flowable.common.engine.impl.history.HistoryLevel;
 import org.flowable.common.engine.impl.interceptor.CommandContext;
 import org.flowable.common.engine.impl.runtime.Clock;
 import org.flowable.engine.ProcessEngineConfiguration;
+import org.flowable.engine.delegate.ReadOnlyDelegateExecution;
+import org.flowable.engine.impl.cfg.ProcessEngineConfigurationImpl;
+import org.flowable.engine.impl.delegate.ReadOnlyDelegateExecutionImpl;
 import org.flowable.engine.impl.persistence.CountingExecutionEntity;
 import org.flowable.engine.impl.util.BpmnLoggingSessionUtil;
 import org.flowable.engine.impl.util.CommandContextUtil;
 import org.flowable.engine.impl.util.CountingEntityUtil;
 import org.flowable.engine.impl.util.ProcessDefinitionUtil;
+import org.flowable.engine.repository.ProcessDefinition;
 import org.flowable.eventsubscription.service.impl.persistence.entity.EventSubscriptionEntity;
 import org.flowable.identitylink.service.impl.persistence.entity.IdentityLinkEntity;
-import org.flowable.job.service.impl.persistence.entity.JobEntity;
-import org.flowable.job.service.impl.persistence.entity.TimerJobEntity;
-import org.flowable.task.service.impl.persistence.entity.TaskEntity;
+import org.flowable.variable.service.VariableServiceConfiguration;
 import org.flowable.variable.service.impl.persistence.entity.VariableInitializingList;
 import org.flowable.variable.service.impl.persistence.entity.VariableInstanceEntity;
 import org.flowable.variable.service.impl.persistence.entity.VariableScopeImpl;
@@ -111,9 +117,6 @@ public class ExecutionEntityImpl extends AbstractBpmnEngineVariableScopeEntity i
 
     // (we cache associated entities here to minimize db queries)
     protected List<EventSubscriptionEntity> eventSubscriptions;
-    protected List<JobEntity> jobs;
-    protected List<TimerJobEntity> timerJobs;
-    protected List<TaskEntity> tasks;
     protected List<IdentityLinkEntity> identityLinks;
 
     // cascade deletion ////////////////////////////////////////////////////////
@@ -133,15 +136,16 @@ public class ExecutionEntityImpl extends AbstractBpmnEngineVariableScopeEntity i
     protected int timerJobCount;
     protected int suspendedJobCount;
     protected int deadLetterJobCount;
+    protected int externalWorkerJobCount;
     protected int variableCount;
     protected int identityLinkCount;
     
     /**
      * Persisted reference to the processDefinition.
      * 
-     * @see #processDefinition
-     * @see #setProcessDefinition(ProcessDefinitionImpl)
-     * @see #getProcessDefinition()
+     * @see #processDefinitionId
+     * @see #setProcessDefinitionId(String)
+     * @see #getProcessDefinitionId()
      */
     protected String processDefinitionId;
 
@@ -166,11 +170,11 @@ public class ExecutionEntityImpl extends AbstractBpmnEngineVariableScopeEntity i
     protected String deploymentId;
 
     /**
-     * Persisted reference to the current position in the diagram within the {@link #processDefinition}.
+     * Persisted reference to the current position in the diagram within the {@link #processDefinitionId}.
      * 
-     * @see #activity
-     * @see #setActivity(ActivityImpl)
-     * @see #getActivity()
+     * @see #activityId
+     * @see #setActivityId(String)
+     * @see #getActivityId()
      */
     protected String activityId;
 
@@ -203,7 +207,7 @@ public class ExecutionEntityImpl extends AbstractBpmnEngineVariableScopeEntity i
      * Persisted reference to the super execution of this execution
      * 
      * @see #getSuperExecution()
-     * @see #setSuperExecution(ExecutionEntityImpl)
+     * @see #setSuperExecution(ExecutionEntity)
      */
     protected String superExecutionId;
 
@@ -239,10 +243,7 @@ public class ExecutionEntityImpl extends AbstractBpmnEngineVariableScopeEntity i
     public static ExecutionEntityImpl createWithEmptyRelationshipCollections() {
         ExecutionEntityImpl execution = new ExecutionEntityImpl();
         execution.executions = new ArrayList<>(1);
-        execution.tasks = new ArrayList<>(1);
         execution.variableInstances = new HashMap<>(1);
-        execution.jobs = new ArrayList<>(1);
-        execution.timerJobs = new ArrayList<>(1);
         execution.eventSubscriptions = new ArrayList<>(1);
         execution.identityLinks = new ArrayList<>(1);
         return execution;
@@ -281,6 +282,7 @@ public class ExecutionEntityImpl extends AbstractBpmnEngineVariableScopeEntity i
         persistentState.put("timerJobCount", timerJobCount);
         persistentState.put("suspendedJobCount", suspendedJobCount);
         persistentState.put("deadLetterJobCount", deadLetterJobCount);
+        persistentState.put("externalWorkerJobCount", externalWorkerJobCount);
         persistentState.put("variableCount", variableCount);
         persistentState.put("identityLinkCount", identityLinkCount);
         persistentState.put("callbackId", callbackId);
@@ -289,6 +291,11 @@ public class ExecutionEntityImpl extends AbstractBpmnEngineVariableScopeEntity i
         persistentState.put("referenceType", referenceType);
         persistentState.put("propagatedStageInstanceId", propagatedStageInstanceId);
         return persistentState;
+    }
+
+    @Override
+    public ReadOnlyDelegateExecution snapshotReadOnly() {
+        return new ReadOnlyDelegateExecutionImpl(this);
     }
 
     // The current flow element, will be filled during operation execution
@@ -391,6 +398,9 @@ public class ExecutionEntityImpl extends AbstractBpmnEngineVariableScopeEntity i
 
     @Override
     public String getProcessDefinitionKey() {
+        if (StringUtils.isEmpty(processDefinitionKey) && StringUtils.isNotEmpty(processDefinitionId)) {
+            resolveProcessDefinitionInfo();
+        }
         return processDefinitionKey;
     }
 
@@ -401,6 +411,12 @@ public class ExecutionEntityImpl extends AbstractBpmnEngineVariableScopeEntity i
 
     @Override
     public String getProcessDefinitionName() {
+        // The process definition name can be null, therefore we can't use an is empty check on it
+        // as it will lead to evaluating the information every time we try to get the name, even though it is null
+        // The process definition key can never be empty, therefore we use it to check if process definition information has been resolved
+        if (StringUtils.isEmpty(processDefinitionKey) && StringUtils.isNotEmpty(processDefinitionId)) {
+            resolveProcessDefinitionInfo();
+        }
         return processDefinitionName;
     }
 
@@ -411,6 +427,9 @@ public class ExecutionEntityImpl extends AbstractBpmnEngineVariableScopeEntity i
 
     @Override
     public Integer getProcessDefinitionVersion() {
+        if (processDefinitionVersion == null && StringUtils.isNotEmpty(processDefinitionId)) {
+            resolveProcessDefinitionInfo();
+        }
         return processDefinitionVersion;
     }
 
@@ -421,6 +440,9 @@ public class ExecutionEntityImpl extends AbstractBpmnEngineVariableScopeEntity i
 
     @Override
     public String getDeploymentId() {
+        if (StringUtils.isEmpty(deploymentId) && StringUtils.isNotEmpty(processDefinitionId)) {
+            resolveProcessDefinitionInfo();
+        }
         return deploymentId;
     }
 
@@ -577,8 +599,16 @@ public class ExecutionEntityImpl extends AbstractBpmnEngineVariableScopeEntity i
         return isScope;
     }
 
+    public boolean getIsScope() {
+        return isScope;
+    }
+
     @Override
     public void setScope(boolean isScope) {
+        this.isScope = isScope;
+    }
+
+    public void setIsScope(boolean isScope) {
         this.isScope = isScope;
     }
 
@@ -589,7 +619,6 @@ public class ExecutionEntityImpl extends AbstractBpmnEngineVariableScopeEntity i
 
     // VariableScopeImpl methods //////////////////////////////////////////////////////////////////
 
-    // TODO: this should ideally move to another place
     @Override
     protected void initializeVariableInstanceBackPointer(VariableInstanceEntity variableInstance) {
         if (processInstanceId != null) {
@@ -602,13 +631,41 @@ public class ExecutionEntityImpl extends AbstractBpmnEngineVariableScopeEntity i
     }
 
     @Override
+    protected boolean storeVariableLocal(String variableName) {
+        if (super.storeVariableLocal(variableName)) {
+            return true;
+        }
+
+        ExecutionEntityImpl parent = getParent();
+        if (parent != null && parent.isMultiInstanceRoot()) {
+
+            if (getCurrentFlowElement() instanceof BoundaryEvent) {
+                // Executions for boundary events should not store variables locally
+                return false;
+            }
+
+            // If the parent is a multi instance root then the variable should be stored in this execution
+            // the multi instance behaviour will collect this variables once it is done
+            // For backwards compatibility we store the variable locally only if the loop characteristics has aggregations
+            FlowElement parentFlowElement = parent.getCurrentFlowElement();
+            if (parentFlowElement instanceof Activity) {
+                MultiInstanceLoopCharacteristics loopCharacteristics = ((Activity) parentFlowElement).getLoopCharacteristics();
+                return loopCharacteristics != null && loopCharacteristics.getAggregations() != null;
+            }
+        }
+
+        return false;
+    }
+
+    @Override
     protected void addLoggingSessionInfo(ObjectNode loggingNode) {
         BpmnLoggingSessionUtil.fillLoggingData(loggingNode, this);
     }
 
     @Override
     protected Collection<VariableInstanceEntity> loadVariableInstances() {
-        return CommandContextUtil.getVariableService().findVariableInstancesByExecutionId(id);
+        ProcessEngineConfigurationImpl processEngineConfiguration = CommandContextUtil.getProcessEngineConfiguration();
+        return processEngineConfiguration.getVariableServiceConfiguration().getVariableService().findVariableInstancesByExecutionId(id);
     }
 
     @Override
@@ -632,7 +689,7 @@ public class ExecutionEntityImpl extends AbstractBpmnEngineVariableScopeEntity i
             }
 
             // If the variable exists on this scope, replace it
-            if (hasVariableLocal(variableName)) {
+            if (storeVariableLocal(variableName)) {
                 setVariableLocal(variableName, value, sourceExecution, true);
                 return;
             }
@@ -822,9 +879,14 @@ public class ExecutionEntityImpl extends AbstractBpmnEngineVariableScopeEntity i
         if (commandContext == null) {
             throw new FlowableException("lazy loading outside command context");
         }
-        VariableInstanceEntity variableInstance = CommandContextUtil.getVariableService().findVariableInstanceByExecutionAndName(id, variableName);
 
-        return variableInstance;
+        ProcessEngineConfigurationImpl processEngineConfiguration = CommandContextUtil.getProcessEngineConfiguration(commandContext);
+        return processEngineConfiguration.getVariableServiceConfiguration().getVariableService()
+                .createInternalVariableInstanceQuery()
+                .executionId(id)
+                .withoutTaskId()
+                .name(variableName)
+                .singleResult();
     }
 
     @Override
@@ -833,7 +895,14 @@ public class ExecutionEntityImpl extends AbstractBpmnEngineVariableScopeEntity i
         if (commandContext == null) {
             throw new FlowableException("lazy loading outside command context");
         }
-        return CommandContextUtil.getVariableService().findVariableInstancesByExecutionAndNames(id, variableNames);
+
+        ProcessEngineConfigurationImpl processEngineConfiguration = CommandContextUtil.getProcessEngineConfiguration(commandContext);
+        return processEngineConfiguration.getVariableServiceConfiguration().getVariableService()
+                .createInternalVariableInstanceQuery()
+                .executionId(id)
+                .withoutTaskId()
+                .names(variableNames)
+                .list();
     }
 
     // event subscription support //////////////////////////////////////////////
@@ -846,48 +915,10 @@ public class ExecutionEntityImpl extends AbstractBpmnEngineVariableScopeEntity i
 
     protected void ensureEventSubscriptionsInitialized() {
         if (eventSubscriptions == null) {
-            eventSubscriptions = CommandContextUtil.getEventSubscriptionService().findEventSubscriptionsByExecution(id);
+            ProcessEngineConfigurationImpl processEngineConfiguration = CommandContextUtil.getProcessEngineConfiguration();
+            eventSubscriptions = processEngineConfiguration.getEventSubscriptionServiceConfiguration().getEventSubscriptionService()
+                    .findEventSubscriptionsByExecution(id);
         }
-    }
-
-    // referenced job entities //////////////////////////////////////////////////
-
-    @Override
-    public List<JobEntity> getJobs() {
-        ensureJobsInitialized();
-        return jobs;
-    }
-
-    protected void ensureJobsInitialized() {
-        if (jobs == null) {
-            jobs = CommandContextUtil.getJobService().findJobsByExecutionId(id);
-        }
-    }
-
-    @Override
-    public List<TimerJobEntity> getTimerJobs() {
-        ensureTimerJobsInitialized();
-        return timerJobs;
-    }
-
-    protected void ensureTimerJobsInitialized() {
-        if (timerJobs == null) {
-            timerJobs = CommandContextUtil.getTimerJobService().findTimerJobsByExecutionId(id);
-        }
-    }
-
-    // referenced task entities ///////////////////////////////////////////////////
-
-    protected void ensureTasksInitialized() {
-        if (tasks == null) {
-            tasks = CommandContextUtil.getTaskService().findTasksByExecutionId(id);
-        }
-    }
-
-    @Override
-    public List<TaskEntity> getTasks() {
-        ensureTasksInitialized();
-        return tasks;
     }
 
     // identity links ///////////////////////////////////////////////////////////
@@ -900,7 +931,9 @@ public class ExecutionEntityImpl extends AbstractBpmnEngineVariableScopeEntity i
 
     protected void ensureIdentityLinksInitialized() {
         if (identityLinks == null) {
-            identityLinks = CommandContextUtil.getIdentityLinkService().findIdentityLinksByProcessInstanceId(id);
+            ProcessEngineConfigurationImpl processEngineConfiguration = CommandContextUtil.getProcessEngineConfiguration();
+            identityLinks = processEngineConfiguration.getIdentityLinkServiceConfiguration().getIdentityLinkService()
+                    .findIdentityLinksByProcessInstanceId(id);
         }
     }
 
@@ -939,9 +972,17 @@ public class ExecutionEntityImpl extends AbstractBpmnEngineVariableScopeEntity i
     public boolean isConcurrent() {
         return isConcurrent;
     }
+    
+    public boolean getIsConcurrent() {
+        return isConcurrent;
+    }
 
     @Override
     public void setConcurrent(boolean isConcurrent) {
+        this.isConcurrent = isConcurrent;
+    }
+
+    public void setIsConcurrent(boolean isConcurrent) {
         this.isConcurrent = isConcurrent;
     }
 
@@ -950,8 +991,16 @@ public class ExecutionEntityImpl extends AbstractBpmnEngineVariableScopeEntity i
         return isActive;
     }
 
+    public boolean getIsActive() {
+        return isActive;
+    }
+
     @Override
     public void setActive(boolean isActive) {
+        this.isActive = isActive;
+    }
+
+    public void setIsActive(boolean isActive) {
         this.isActive = isActive;
     }
 
@@ -965,8 +1014,16 @@ public class ExecutionEntityImpl extends AbstractBpmnEngineVariableScopeEntity i
         return isEnded;
     }
 
+    public boolean setIsEnded() {
+        return isEnded;
+    }
+
     @Override
     public void setEnded(boolean isEnded) {
+        this.isEnded = isEnded;
+    }
+
+    public void setIsEnded(boolean isEnded) {
         this.isEnded = isEnded;
     }
 
@@ -1010,8 +1067,16 @@ public class ExecutionEntityImpl extends AbstractBpmnEngineVariableScopeEntity i
         return isEventScope;
     }
 
+    public boolean getIsEventScope() {
+        return isEventScope;
+    }
+
     @Override
     public void setEventScope(boolean isEventScope) {
+        this.isEventScope = isEventScope;
+    }
+
+    public void setIsEventScope(boolean isEventScope) {
         this.isEventScope = isEventScope;
     }
 
@@ -1020,8 +1085,16 @@ public class ExecutionEntityImpl extends AbstractBpmnEngineVariableScopeEntity i
         return isMultiInstanceRoot;
     }
 
+    public boolean getIsMultiInstanceRoot() {
+        return isMultiInstanceRoot;
+    }
+
     @Override
     public void setMultiInstanceRoot(boolean isMultiInstanceRoot) {
+        this.isMultiInstanceRoot = isMultiInstanceRoot;
+    }
+
+    public void setIsMultiInstanceRoot(boolean isMultiInstanceRoot) {
         this.isMultiInstanceRoot = isMultiInstanceRoot;
     }
 
@@ -1030,8 +1103,16 @@ public class ExecutionEntityImpl extends AbstractBpmnEngineVariableScopeEntity i
         return isCountEnabled;
     }
 
+    public boolean getIsCountEnabled() {
+        return isCountEnabled;
+    }
+
     @Override
     public void setCountEnabled(boolean isCountEnabled) {
+        this.isCountEnabled = isCountEnabled;
+    }
+
+    public void setIsCountEnabled(boolean isCountEnabled) {
         this.isCountEnabled = isCountEnabled;
     }
 
@@ -1252,6 +1333,16 @@ public class ExecutionEntityImpl extends AbstractBpmnEngineVariableScopeEntity i
     }
 
     @Override
+    public int getExternalWorkerJobCount() {
+        return externalWorkerJobCount;
+    }
+
+    @Override
+    public void setExternalWorkerJobCount(int externalWorkerJobCount) {
+        this.externalWorkerJobCount = externalWorkerJobCount;
+    }
+
+    @Override
     public int getVariableCount() {
         return variableCount;
     }
@@ -1333,6 +1424,23 @@ public class ExecutionEntityImpl extends AbstractBpmnEngineVariableScopeEntity i
         return activityInstanceId;
     }
 
+    protected void resolveProcessDefinitionInfo() {
+        ProcessEngineConfigurationImpl processEngineConfiguration = CommandContextUtil.getProcessEngineConfiguration();
+        if (processEngineConfiguration == null) {
+            // We are outside of a command context so do not try to resolve anything
+            return;
+        }
+        ProcessDefinition processDefinition = ProcessDefinitionUtil.getProcessDefinition(processDefinitionId, false, processEngineConfiguration);
+        if (processDefinition == null) {
+            throw new FlowableException("Cannot get process definition for id " + processDefinitionId);
+        }
+
+        this.processDefinitionKey = processDefinition.getKey();
+        this.processDefinitionName = processDefinition.getName();
+        this.processDefinitionVersion = processDefinition.getVersion();
+        this.deploymentId = processDefinition.getDeploymentId();
+    }
+
     // toString /////////////////////////////////////////////////////////////////
 
     @Override
@@ -1358,6 +1466,12 @@ public class ExecutionEntityImpl extends AbstractBpmnEngineVariableScopeEntity i
             }
             return strb.toString();
         }
+    }
+
+
+    @Override
+    protected VariableServiceConfiguration getVariableServiceConfiguration() {
+        return CommandContextUtil.getProcessEngineConfiguration().getVariableServiceConfiguration();
     }
 
 }
